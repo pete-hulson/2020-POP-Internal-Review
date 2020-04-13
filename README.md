@@ -1,4 +1,7 @@
 # 2020-POP-Internal-Review
 Spot to share code/etc for internal review of POP
 
-These are the final 2019 GOA POP ADMB files, from these we can add various aspects to be included in the tpl/dat/ctl files thru the different branches
+Update-model branch includes changes to priors/data
+- Change M prior from 0.05 to 0.0614 (Hamel 2015)
+- Change q prior from 1 to 1.15 (Jones et al in prep)
+- Use ALK in fishery age comp data
