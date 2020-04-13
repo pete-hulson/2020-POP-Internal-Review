@@ -84,6 +84,17 @@ DATA_SECTION
   init_number          initial_LMR                             // Initial value for log mean recruitment
   init_number          yieldratio                              // Ratio of catch to ABC over most recent 3 years
 
+
+//==============================================================================================================================
+
+// Read data from the control file for recruitment time-blocks
+  !! ad_comm::change_datafile_name("loop.ctl");        // Read in phases, penalties and priors from "tem.ctl"
+
+  init_number R_Bk
+  init_vector R_Bk_Yrs(1,R_Bk+1)
+
+
+
 //==============================================================================================================================
 
 // Read data from the data file
@@ -199,7 +210,8 @@ DATA_SECTION
   int                  iyr
   int                  i
   int                  j
-  int                  l;
+  int                  l
+  int                  b;
 
 //EOF Marker
   init_int             eof;
@@ -247,7 +259,7 @@ INITIALIZATION_SECTION
 // Starting values for estimated parameters; these values over-ride all others
   logm                 log_mprior
   log_mean_rec         initial_LMR
-  sigr                 sigrprior    
+  sigr                 sigrprior 
   a50                  2.5
   delta                4.5
   a502                 6
@@ -267,8 +279,8 @@ PARAMETER_SECTION
 
 // Stock-recruitment
   vector               Sp_Biom(styr,endyr)
-  init_number          log_mean_rec(1);                        // Unfish equil recruitment (logged)
-  init_bounded_number  sigr(0.3,10,ph_sigr);                   // Recruitment sderr parameter
+  init_vector          log_mean_rec(1,R_Bk,1);                        // Unfish equil recruitment (logged)
+  init_bounded_vector  sigr(1,R_Bk,0.3,10,ph_sigr);                   // Recruitment sderr parameter
 
 // Fishery selectivity
   init_number          a50(ph_fish_sel);                       // age at 50% selection                                                   
@@ -396,12 +408,16 @@ PARAMETER_SECTION
   vector               age_like(1,6);                          // Likelihood values for age and size compositions allowance for up 6 comps
   vector               offset(1,6);                            // Multinomial "offset"
   number               rec_like;                               // Likelihood value for recruitments
+  vector               rec_like_blk(1,R_Bk);
+  vector               norm2_recdevs(1,R_Bk);
+  vector               szcnt_recdevs(1,R_Bk);
   number               ssqcatch;                               // Likelihood value for catch estimation
   number               F_mort_regularity;                      // Penalty value for fishing mortality regularity
   number               avg_sel_penalty;                        // Penalty value for selectivity regularity penalty
 
 // Priors
   vector               priors(1,5);                            // Prior penalty values for sigr,q,natural mortality
+  vector               sigr_prior(1,R_Bk);
 
 // Define an objective function
   number               Like;                                   // Likelihood for data fits
@@ -499,7 +515,7 @@ FUNCTION Get_Mortality_Rates
 //==============================================================================================================================
 
   natmort = mfexp(logm);                                       // setting natural mortality to arithmetic scale
-  if(ph_m>0) nattymort=natmort; else nattymort=log_mean_rec;
+  if(ph_m>0) nattymort=natmort; else nattymort=log_mean_rec(R_Bk);
   Fmort = mfexp(log_avg_F +  log_F_devs);                      // setting fishing mortaltiy to arithmetic scale
   for (iyr=styr; iyr<=1976; iyr++)
     F(iyr) = Fmort(iyr) * fish_sel1;                           // Getting fully selected fishing mortality
@@ -520,21 +536,33 @@ FUNCTION Get_Numbers_At_Age
   int itmp;
   for (j=2;j<nages_M;j++) {
     itmp = styr+1-j;
-    natage(styr,j) = mfexp(log_mean_rec - natmort * double(j-1)+ log_rec_dev(itmp)); 
+    natage(styr,j) = mfexp(log_mean_rec(1) - natmort * double(j-1)+ log_rec_dev(itmp)); 
   }
-  natage(styr,nages_M) = mfexp(log_mean_rec - natmort * (nages_M-1)) / (1. - exp(-natmort));
+  natage(styr,nages_M) = mfexp(log_mean_rec(1) - natmort * (nages_M-1)) / (1. - exp(-natmort));
+
 
 // Remaining years
-  for (i=styr;i<endyr;i++) {
-    natage(i,1) = mfexp(log_rec_dev(i) + log_mean_rec);
-    natage(i+1)(2,nages_M) = ++elem_prod(natage(i)(1,nages_M-1),S(i)(1,nages_M-1));       // Following year
-    natage(i+1,nages_M) += natage(i,nages_M)*S(i,nages_M);
-    Sp_Biom(i) = natage(i) * wt_mature;                        // Old way, correct way to get SSB at start of spawning season would be: Sp_Biom(i) = elem_prod(natage(i),pow(S(i),spawn_fract)) * wt_mature;
+  for (b=1;b<=R_Bk;b++) {
+    for(i=R_Bk_Yrs(b);i<R_Bk_Yrs(b+1);i++){
+      natage(i,1) = mfexp(log_rec_dev(i) + log_mean_rec(b));
+      natage(i+1)(2,nages_M) = ++elem_prod(natage(i)(1,nages_M-1),S(i)(1,nages_M-1));       // Following year
+      natage(i+1,nages_M) += natage(i,nages_M)*S(i,nages_M);
+      Sp_Biom(i) = natage(i) * wt_mature;
+    }
   }
 
 // End year abundance
-  natage(endyr,1) = mfexp(log_rec_dev(endyr) + log_mean_rec); 
+  natage(endyr,1) = mfexp(log_rec_dev(endyr) + log_mean_rec(R_Bk)); 
   Sp_Biom(endyr) = elem_prod(natage(endyr),pow(S(endyr),spawn_fract)) * wt_mature;  //Right way, old way was: Sp_Biom(endyr) = natage(endyr)* wt_mature;
+
+// Get rec_devs stuff for penalties
+  for (b=1;b<R_Bk;b++) {
+    norm2_recdevs(b) = norm2(log_rec_dev(R_Bk_Yrs(b),(R_Bk_Yrs(b+1)-1)));
+    szcnt_recdevs(b) = size_count(log_rec_dev(R_Bk_Yrs(b),(R_Bk_Yrs(b+1)-1)));
+  }
+  norm2_recdevs(R_Bk) = norm2(log_rec_dev(R_Bk_Yrs(R_Bk),R_Bk_Yrs(R_Bk+1)));
+  szcnt_recdevs(R_Bk) = size_count(log_rec_dev(R_Bk_Yrs(R_Bk),R_Bk_Yrs(R_Bk+1)));
+
 
 //==============================================================================================================================
 FUNCTION Get_Catch_at_Age
@@ -653,8 +681,8 @@ FUNCTION Get_Predicted_Values
   
 // set up some sdreport numbers
   if(ph_q_srv2>0) q2=mfexp(log_q_srv2); else q2=mfexp(log_q_srv1);
-  cigar= sigr;
-  LMR = log_mean_rec;
+  cigar= sigr(R_Bk);
+  LMR = log_mean_rec(R_Bk);
 
 //==============================================================================================================================
 FUNCTION Get_Dependent_Vars
@@ -925,23 +953,33 @@ FUNCTION Calc_Priors
 //==============================================================================================================================
 
 // Calculate prior penalties
-    priors.initialize();
-    if (active(sigr))
-      priors(1)    = square(log(sigr/sigrprior))/(2.*square(cvsigrprior));
-    if (active(log_q_srv1))
-      priors(2)    = square(log_q_srv1-log_q_srv1prior)/(2.*square(cvq_srv1prior));
-    if (active(logm))
-      priors(3)    = square(logm-log(mprior))/(2.*square(cvmprior));
-    if (active(log_q_srv2))
-      priors(4)    = square(log_q_srv2-log_q_srv2prior)/(2.*square(cvq_srv2prior));
+  priors.initialize();
+  sigr_prior.initialize();
+
+  if (active(sigr)){
+    for(b=1;b<=R_Bk;b++){
+      sigr_prior(b) = square(log(sigr(b)/sigrprior))/(2.*square(cvsigrprior));
+    }
+    priors(1) = sum(sigr_prior);
+  }
+  if (active(log_q_srv1))
+    priors(2)    = square(log_q_srv1-log_q_srv1prior)/(2.*square(cvq_srv1prior));
+  if (active(logm))
+    priors(3)    = square(logm-log(mprior))/(2.*square(cvmprior));
+  if (active(log_q_srv2))
+    priors(4)    = square(log_q_srv2-log_q_srv2prior)/(2.*square(cvq_srv2prior));
 
 //==============================================================================================================================
 FUNCTION Rec_Like
 //==============================================================================================================================
 
   rec_like.initialize();
+  rec_like_blk.initialize();
 
-  rec_like = norm2(log_rec_dev)/(2*square(sigr)) + (size_count(log_rec_dev)*log(sigr));
+  for (b=1;b<=R_Bk;b++) {
+    rec_like_blk(b) = norm2_recdevs(b)/(2*square(sigr(b))) + szcnt_recdevs(b)*log(sigr(b));
+  }
+  rec_like = sum(rec_like_blk);
 
 //==============================================================================================================================
 FUNCTION F_Like
@@ -1021,9 +1059,9 @@ REPORT_SECTION
   report<<q_srv1<<endl;
   report<<"   nat_mort  "<<endl;
   report<<natmort<<endl;
-  report<<"  sigr   "<<endl;  
-  report<<sigr<<endl;  
-  report<<"   log_mean_rec"<<endl;
+  report<<"  sigr "<<endl;  
+  report<<sigr<<endl;   
+  report<<"   log_mean_rec "<<endl;
   report<<log_mean_rec<<endl;
   report<<"   q_alt  "<<endl;
   report<<q_srv2<<endl;report<<endl;
