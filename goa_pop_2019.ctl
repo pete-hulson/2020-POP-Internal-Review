@@ -8,13 +8,13 @@ goa_pop_2019.dat	# data_file
 3	# ph_fish_sel
 3	# ph_srv1_sel
 -3	# ph_srv2_sel
-0.05	# mprior
+0.0614	# mprior
 0.1	# cvmprior
 2	# ph_m
 1.7	# sigrprior
 0.2	# cvsigrprior
 2	# ph_sigr
-1	# q_srv1prior
+1.15	# q_srv1prior
 0.447213595	# cvq_srv1prior
 3	# ph_q_srv1
 1	# q_srv2prior
