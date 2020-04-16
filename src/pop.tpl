@@ -1,5 +1,6 @@
 //==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+==+
 //
+//
 //  Statistical, separable age-structured population model for Gulf of Alaska Pacific Ocean perch 
 //  Alaska Fisheries Science Center, Auke Bay Laboratories
 //  P. Hulson: pete.hulson@noaa.gov
@@ -757,8 +758,6 @@ FUNCTION Compute_SPR_Rates
   F50  = mF50*max(seltmp);
   F40  = mF40*max(seltmp);
   F35  = mF35*max(seltmp);
-  /*
-  */
   for (i=1;i<=4;i++)
     Nspr(i,1)=1.;
   
@@ -906,6 +905,8 @@ FUNCTION Evaluate_Objective_Function
       obj_fun       += norm2(F);   
   if (active(mF50)&&last_phase())
     obj_fun         += sprpen;                                 // To solve for the F40 etc.     
+	for (int i=1;i<=3;i++)
+	  obj_fun         += norm2(log(selp(i))-log(selp_in(i)));
 
 //==============================================================================================================================
 FUNCTION Catch_Like
@@ -1295,6 +1296,7 @@ GLOBALS_SECTION
 	#define log_input(object) write_input_log << "# " #object "\n" << object << endl;
   ofstream write_input_log("input.log");
   ofstream R_report("pop_R.rep");
+  
 
 TOP_OF_MAIN_SECTION
   gradient_structure::set_MAX_NVAR_OFFSET(1000);

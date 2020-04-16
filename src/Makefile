@@ -8,11 +8,13 @@ endif
 
 all: pop 
 
-ms: ms.tpl 
-	@admb -f ms.tpl 
-
 pop: pop.tpl 
 	@admb  pop.tpl 
+ifdef ComSpec
+	$(COPY) pop.exe mypath
+else
+	$(COPY) pop ~/
+endif
 
 clean:
 	@$(RM) *.cpp

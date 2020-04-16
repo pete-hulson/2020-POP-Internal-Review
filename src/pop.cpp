@@ -16,6 +16,7 @@
 	#define log_input(object) write_input_log << "# " #object "\n" << object << endl;
   ofstream write_input_log("input.log");
   ofstream R_report("pop_R.rep");
+  
 #ifdef DEBUG
   #include <chrono>
 #endif
@@ -918,8 +919,6 @@ void model_parameters::Compute_SPR_Rates(void)
   F50  = mF50*max(seltmp);
   F40  = mF40*max(seltmp);
   F35  = mF35*max(seltmp);
-  /*
-  */
   for (i=1;i<=4;i++)
     Nspr(i,1)=1.;
   
@@ -1047,6 +1046,8 @@ void model_parameters::Evaluate_Objective_Function(void)
       obj_fun       += norm2(F);   
   if (active(mF50)&&last_phase())
     obj_fun         += sprpen;                                 // To solve for the F40 etc.     
+	for (int i=1;i<=3;i++)
+	  obj_fun         += norm2(log(selp(i))-log(selp_in(i)));
 }
 
 void model_parameters::Catch_Like(void)
