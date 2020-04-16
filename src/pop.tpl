@@ -48,6 +48,7 @@ DATA_SECTION
   init_int             ph_avg_F                                // Phase for estimating average fishing mortality
   init_int             ph_recdev                               // Phase for estimating recruitment deviations
   init_int             ph_fish_sel                             // Phase for estimating fishing selectivity
+       int             ph_fish_sel_dlog                        // Phase for estimating fishing selectivity
   init_int             ph_srv1_sel                             // Phase for estimating survey selectivity
   init_int             ph_srv2_sel                             // Phase for estimating survey selectivity
 
@@ -92,6 +93,7 @@ DATA_SECTION
   init_int             num_yrs_sel_ch                          // number of years selectivity changes
   init_ivector         yrs_sel_ch(1,num_yrs_sel_ch)            // years selectivity changes
   init_vector          sigma_sel_ch(1,num_yrs_sel_ch)          // sigma (cv) of selectivity changes
+  !!  if (fishselopt==2) {ph_fish_sel_dlog=ph_fish_sel; ph_fish_sel=-1;} else {ph_fish_sel_dlog=-1;}
 
 //==============================================================================================================================
 
@@ -286,7 +288,7 @@ PARAMETER_SECTION
   init_number          delta2(ph_fish_sel);                    // age between 50% selection and 95% selection....
   init_number          a503(ph_fish_sel);                      // age at 50% selection                                                   
   init_number          delta3(ph_fish_sel);                    // age between 50% selection and 95% selection....
-	init_vector          selp(1,3)                               // 3 par double logistic, p1=age 5% select, p2=dist from 5% to 95%, p3= dist from "95%" and desc 5%
+	init_vector          selp(1,3,ph_fish_sel_dlog)              // 3 par double logistic, p1=age 5% select, p2=dist from 5% to 95%, p3= dist from "95%" and desc 5%
   number               expa50;                                 // gamma selectivity parameter
   number               expa502;                                // gamma selectivity parameter
   vector               fish_sel1(1,nages_M);                    // vectory of fishery selectivty parameters on arithmetic scale
