@@ -91,9 +91,11 @@ DATA_SECTION
   init_number          yieldratio                              // Ratio of catch to ABC over most recent 3 years
   init_int             fishselopt                              // Option for selectivity type
   init_int             num_yrs_sel_ch                          // number of years selectivity changes
+       int             n_sel_ch_fsh                            // number of years selectivity changes
   init_ivector         yrs_sel_ch(1,num_yrs_sel_ch)            // years selectivity changes
   init_vector          sigma_sel_ch(1,num_yrs_sel_ch)          // sigma (cv) of selectivity changes
-  !!  if (fishselopt==2) {ph_fish_sel_dlog=ph_fish_sel; ph_fish_sel=-1;} else {ph_fish_sel_dlog=-1;}
+  !!  if (fishselopt==2) {ph_fish_sel_dlog=ph_fish_sel; ph_fish_sel=-1;} else {ph_fish_sel_dlog=-1; }
+  !!  n_sel_ch_fsh=num_yrs_sel_ch+1;
 
 //==============================================================================================================================
 
@@ -110,6 +112,8 @@ DATA_SECTION
   init_int             n_ageage_mat
   init_int             n_sizeage_mat
   init_vector          len_bin_labels(1,nlenbins)
+  ivector              age_vector(1,nages_M)
+  !! for (int j=recage;j<=recage+nages_M-1;j++) age_vector = j;
   int                  styr_rec
   int                  styr_sp
   int                  endyr_sp
@@ -288,7 +292,7 @@ PARAMETER_SECTION
   init_number          delta2(ph_fish_sel);                    // age between 50% selection and 95% selection....
   init_number          a503(ph_fish_sel);                      // age at 50% selection                                                   
   init_number          delta3(ph_fish_sel);                    // age between 50% selection and 95% selection....
-	init_vector          selp(1,3,ph_fish_sel_dlog)              // 3 par double logistic, p1=age 5% select, p2=dist from 5% to 95%, p3= dist from "95%" and desc 5%
+	init_matrix          selp(1,3,1,n_sel_ch_fsh,ph_fish_sel_dlog) // 3 par double logistic, p1=age 5% select, p2=dist from 5% to 95%, p3= dist from "95%" and desc 5%
   number               expa50;                                 // gamma selectivity parameter
   number               expa502;                                // gamma selectivity parameter
   vector               fish_sel1(1,nages_M);                    // vectory of fishery selectivty parameters on arithmetic scale
@@ -501,11 +505,36 @@ FUNCTION Get_Selectivity
 			// cout <<fish_sel<<endl;exit(1);
       break;
     }
-    case 2:
+    case 2: // Double logistic
     {
-			dvariable   i1;
-			dvariable   i2;
-      break;
+      /*
+      sel_p1_fsh(k)  = mfexp(logsel_p1_fsh(k));
+      sel_p3_fsh(k)  = mfexp(logsel_p3_fsh(k));
+      */
+      int isel_ch_tmp = 1 ;
+      dvariable p1 = selp(1,isel_ch_tmp);
+      dvariable p2 = selp(2,isel_ch_tmp);
+      dvariable p3 = selp(3,isel_ch_tmp);
+      dvariable i1 = p1 + p2;
+      dvariable i2 = p1 + i1 + p3;
+      
+      for (i=styr;i<=endyr;i++)
+      {
+        if (i==yrs_sel_ch(isel_ch_tmp)) 
+        {
+          p1 = selp(1,isel_ch_tmp);
+          p2 = selp(2,isel_ch_tmp);
+          p3 = selp(3,isel_ch_tmp);
+          i1 = p1 + p2;
+          i2 = p1 + i1 + p3;
+          if (isel_ch_tmp<n_sel_ch_fsh)
+            isel_ch_tmp++;
+        }
+        fish_sel(i) = exp( ( -log(1.0 + mfexp(-2.9444389792/p1 * ( age_vector - i1) )) +
+               log(1. - 1./(1.0 + mfexp(-2.9444389792/p3 * ( age_vector - i2))) ) )+0.102586589) ; // constant at end is log(0.95*0.95)
+      // cout << p1 << " "<<p2<<" "<<p3<<endl<<i1<<" "<<i2<<endl<<age_vector<<endl<<sel_fsh(k,i)<<endl;exit(1);
+      }
+    break;
     }
   }
 

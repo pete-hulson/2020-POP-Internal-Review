@@ -110,6 +110,8 @@ model_data::model_data(int argc,char * argv[]) : ad_comm(argc,argv)
   num_yrs_sel_ch.allocate("num_yrs_sel_ch");
   yrs_sel_ch.allocate(1,num_yrs_sel_ch,"yrs_sel_ch");
   sigma_sel_ch.allocate(1,num_yrs_sel_ch,"sigma_sel_ch");
+  if (fishselopt==2) {ph_fish_sel_dlog=ph_fish_sel; ph_fish_sel=-1;} else {ph_fish_sel_dlog=-1; }
+  n_sel_ch_fsh=num_yrs_sel_ch+1;
  ad_comm::change_datafile_name(data_file);                 // Read data from the data file
   styr.allocate("styr");
   endyr.allocate("endyr");
@@ -120,6 +122,8 @@ model_data::model_data(int argc,char * argv[]) : ad_comm(argc,argv)
   n_ageage_mat.allocate("n_ageage_mat");
   n_sizeage_mat.allocate("n_sizeage_mat");
   len_bin_labels.allocate(1,nlenbins,"len_bin_labels");
+  age_vector.allocate(1,nages_M);
+ for (int j=recage;j<=recage+nages_M-1;j++) age_vector = j;
   nyrs = endyr - styr + 1;
  styr_rec = (styr - nages_M) + 1;                          // First year of recruitment
  styr_sp  = styr_rec - recage ;                            // First year of spawning biomass  
@@ -247,7 +251,7 @@ model_parameters::model_parameters(int sz,int argc,char * argv[]) :
   delta2.allocate(ph_fish_sel,"delta2");
   a503.allocate(ph_fish_sel,"a503");
   delta3.allocate(ph_fish_sel,"delta3");
-  selp.allocate(1,3,"selp");
+  selp.allocate(1,3,1,n_sel_ch_fsh,ph_fish_sel_dlog,"selp");
   expa50.allocate("expa50");
   #ifndef NO_AD_INITIALIZE
   expa50.initialize();
@@ -696,11 +700,36 @@ void model_parameters::Get_Selectivity(void)
 			// cout <<fish_sel<<endl;exit(1);
       break;
     }
-    case 2:
+    case 2: // Double logistic
     {
-			dvariable   i1;
-			dvariable   i2;
-      break;
+      /*
+      sel_p1_fsh(k)  = mfexp(logsel_p1_fsh(k));
+      sel_p3_fsh(k)  = mfexp(logsel_p3_fsh(k));
+      */
+      int isel_ch_tmp = 1 ;
+      dvariable p1 = selp(1,isel_ch_tmp);
+      dvariable p2 = selp(2,isel_ch_tmp);
+      dvariable p3 = selp(3,isel_ch_tmp);
+      dvariable i1 = p1 + p2;
+      dvariable i2 = p1 + i1 + p3;
+      
+      for (i=styr;i<=endyr;i++)
+      {
+        if (i==yrs_sel_ch(isel_ch_tmp)) 
+        {
+          p1 = selp(1,isel_ch_tmp);
+          p2 = selp(2,isel_ch_tmp);
+          p3 = selp(3,isel_ch_tmp);
+          i1 = p1 + p2;
+          i2 = p1 + i1 + p3;
+          if (isel_ch_tmp<n_sel_ch_fsh)
+            isel_ch_tmp++;
+        }
+        fish_sel(i) = exp( ( -log(1.0 + mfexp(-2.9444389792/p1 * ( age_vector - i1) )) +
+               log(1. - 1./(1.0 + mfexp(-2.9444389792/p3 * ( age_vector - i2))) ) )+0.102586589) ; // constant at end is log(0.95*0.95)
+      // cout << p1 << " "<<p2<<" "<<p3<<endl<<i1<<" "<<i2<<endl<<age_vector<<endl<<sel_fsh(k,i)<<endl;exit(1);
+      }
+    break;
     }
   }
   for (j=1;j<=nages_M;j++)

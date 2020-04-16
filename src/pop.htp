@@ -14,6 +14,7 @@ class model_data : public ad_comm{
   data_int ph_avg_F;
   data_int ph_recdev;
   data_int ph_fish_sel;
+  int ph_fish_sel_dlog;
   data_int ph_srv1_sel;
   data_int ph_srv2_sel;
   data_number mprior;
@@ -49,6 +50,7 @@ class model_data : public ad_comm{
   data_number yieldratio;
   data_int fishselopt;
   data_int num_yrs_sel_ch;
+  int n_sel_ch_fsh;
   data_ivector yrs_sel_ch;
   data_vector sigma_sel_ch;
   data_int styr;
@@ -60,6 +62,7 @@ class model_data : public ad_comm{
   data_int n_ageage_mat;
   data_int n_sizeage_mat;
   data_vector len_bin_labels;
+  ivector age_vector;
   int styr_rec;
   int styr_sp;
   int endyr_sp;
@@ -189,7 +192,7 @@ private:
   param_init_number delta2;
   param_init_number a503;
   param_init_number delta3;
-  param_init_vector selp;
+  param_init_matrix selp;
   param_number expa50;
   param_number expa502;
   param_vector fish_sel1;
