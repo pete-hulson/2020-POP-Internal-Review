@@ -1,0 +1,346 @@
+#if !defined(_pop_)
+#  define _pop_
+
+class model_data : public ad_comm{
+  ofstream *   pad_evalout;
+  init_adstring ctrl_file;
+  init_adstring mat_file;
+  init_adstring model_name;
+  init_adstring data_file;
+  data_int styr_rec_est;
+  data_int endyr_rec_est;
+  int nrecs_est;
+  data_int ph_Fdev;
+  data_int ph_avg_F;
+  data_int ph_recdev;
+  data_int ph_fish_sel;
+  data_int ph_srv1_sel;
+  data_int ph_srv2_sel;
+  data_number mprior;
+  double log_mprior;
+  data_number cvmprior;
+  data_int ph_m;
+  data_number sigrprior;
+  data_number cvsigrprior;
+  data_int ph_sigr;
+  data_number q_srv1prior;
+  double log_q_srv1prior;
+  data_number cvq_srv1prior;
+  data_int ph_q_srv1;
+  data_number q_srv2prior;
+  double log_q_srv2prior;
+  data_number cvq_srv2prior;
+  data_int ph_q_srv2;
+  data_int yr_catchwt;
+  data_number wt_ssqcatch;
+  data_number wt_ssqcatch2;
+  data_number wt_cpue;
+  data_number wt_srv1;
+  data_number wt_srv2;
+  data_number wt_fish_age;
+  data_number wt_srv1_age;
+  data_number wt_fish_size;
+  data_number wt_srv1_size;
+  data_number wt_srv2_size;
+  data_number wt_rec_var;
+  data_number wt_fmort_reg;
+  data_number wt_avg_sel;
+  data_number initial_LMR;
+  data_number yieldratio;
+  data_int fishselopt;
+  data_int num_yrs_sel_ch;
+  data_ivector yrs_sel_ch;
+  data_vector sigma_sel_ch;
+  data_int styr;
+  data_int endyr;
+  data_int recage;
+  data_int nages_D;
+  data_int nages_M;
+  data_int nlenbins;
+  data_int n_ageage_mat;
+  data_int n_sizeage_mat;
+  data_vector len_bin_labels;
+  int styr_rec;
+  int styr_sp;
+  int endyr_sp;
+  int nyrs;
+  dvector yy;
+  dvector aa;
+  dvector aa_D;
+  int ph_F50;
+  data_number spawn_fract;
+  data_vector wt;
+  data_vector obs_catch_early;
+  data_vector obs_catch_later;
+  data_int nyrs_cpue;
+  data_ivector yrs_cpue;
+  data_vector obs_cpue;
+  double mean_obs_cpue;
+  data_int nyrs_srv1;
+  data_ivector yrs_srv1;
+  data_vector obs_srv1_biom;
+  data_vector obs_srv1_se;
+  data_vector obs_srv1_lci;
+  data_vector obs_srv1_uci;
+  data_int nyrs_srv2;
+  data_ivector yrs_srv2;
+  data_vector obs_srv2_biom;
+  data_vector obs_srv2_se;
+  data_vector obs_srv2_lci;
+  data_vector obs_srv2_uci;
+  data_int nyrs_fish_age;
+  data_ivector yrs_fish_age;
+  data_vector nsamples_fish_age;
+  data_vector nhauls_fish_age;
+  data_ivector age_age_ind_fsh;
+  data_matrix oac_fish;
+  dvector nmulti_fish_age;
+  data_int nyrs_srv1_age;
+  data_ivector yrs_srv1_age;
+  data_vector nsamples_srv1_age;
+  data_vector nhauls_srv1_age;
+  data_ivector age_age_ind_srv;
+  data_matrix oac_srv1;
+  dvector nmulti_srv1_age;
+  data_int nyrs_fish_size;
+  data_ivector yrs_fish_size;
+  data_vector nsamples_fish_size;
+  data_vector nhauls_fish_size;
+  data_ivector siz_age_ind_fsh;
+  data_matrix osc_fish;
+  dvector nmulti_fish_size;
+  data_int nyrs_srv1_size;
+  data_ivector yrs_srv1_size;
+  data_vector nsamples_srv1_size;
+  data_vector nhauls_srv1_size;
+  data_ivector siz_age_ind_srv1;
+  data_matrix osc_srv1;
+  data_int nyrs_srv2_size;
+  data_ivector yrs_srv2_size;
+  data_vector nsamples_srv2_size;
+  data_vector nhauls_srv2_size;
+  data_ivector siz_age_ind_srv2;
+  data_matrix osc_srv2;
+  data_3array sizeage;
+  data_3array ageage;
+  int iyr;
+  int i;
+  int j;
+  int l;
+  data_int eof;
+  data_int nages_mat;
+  data_vector ages_mat;
+  data_vector L_tot_na;
+  data_vector L_mat_na;
+  data_vector C_tot_na;
+  data_vector C_mat_na;
+  ~model_data();
+  model_data(int argc,char * argv[]);
+  friend class model_parameters;
+};
+
+class model_parameters : public model_data ,
+  public function_minimizer
+{
+public:
+  ~model_parameters();
+  void preliminary_calculations(void);
+  void set_runtime(void);
+  static int mc_phase(void)
+  {
+    return initial_params::mc_phase;
+  }
+  static int mceval_phase(void)
+  {
+    return initial_params::mceval_phase;
+  }
+  static int sd_phase(void)
+  {
+    return initial_params::sd_phase;
+  }
+  static int current_phase(void)
+  {
+    return initial_params::current_phase;
+  }
+  static int last_phase(void)
+  {
+    return (initial_params::current_phase
+      >=initial_params::max_number_phases);
+  }
+  static prevariable current_feval(void)
+  {
+    return *objective_function_value::pobjfun;
+  }
+private:
+  dvariable adromb(dvariable(model_parameters::*f)(const dvariable&), double a, double b, int ns)
+  {
+    using namespace std::placeholders;
+    _func func = std::bind(f, this, _1);
+    return function_minimizer::adromb(func, a, b, ns);
+  }
+  ivector integer_control_flags;
+  dvector double_control_flags;
+  param_vector Sp_Biom;
+  param_init_number log_mean_rec;
+  param_init_bounded_number sigr;
+  param_init_number a50;
+  param_init_number delta;
+  param_init_number a502;
+  param_init_number delta2;
+  param_init_number a503;
+  param_init_number delta3;
+  param_init_vector selp;
+  param_number expa50;
+  param_number expa502;
+  param_vector fish_sel1;
+  param_vector fish_sel2;
+  param_vector fish_sel3;
+  param_vector fish_sel4;
+  param_matrix fish_sel;
+  param_init_number a50_srv1;
+  param_init_number delta_srv1;
+  param_vector srv1_sel;
+  param_init_number a50_srv2;
+  param_init_number delta_srv2;
+  param_vector srv2_sel;
+  param_init_number log_avg_F;
+  param_init_bounded_vector log_F_devs;
+  param_vector Fmort;
+  param_matrix Z;
+  param_matrix F;
+  param_matrix S;
+  param_init_number mat_a50;
+  param_init_number mat_delta;
+  param_vector L_pmat;
+  param_vector C_pmat;
+  param_vector Pred_pmat;
+  param_vector p_mature;
+  param_vector wt_mature;
+  param_vector Like_L_vec;
+  param_vector Like_C_vec;
+  param_number Like_L;
+  param_number Like_C;
+  param_number zero_pen_mat;
+  param_number k;
+  param_vector natmortv;
+  param_init_bounded_vector log_rec_dev;
+  param_matrix natage;
+  param_matrix batage;
+  param_matrix catage;
+  param_vector pred_catch_early;
+  param_vector pred_catch_later;
+  param_init_number log_q_srv1;
+  param_init_number log_q_srv2;
+  param_init_number cv_cpue;
+  param_init_number logm;
+  param_number q_cpue;
+  param_vector pred_cpue;
+  param_vector pred_srv1;
+  param_vector pred_srv2;
+  param_matrix eac_fish;
+  param_matrix eac_srv1;
+  param_matrix esc_fish;
+  param_matrix esc_srv1;
+  param_matrix esc_srv2;
+  param_vector effn_fish_age;
+  param_vector sdnr_fish_age;
+  param_vector effn_fish_size;
+  param_vector sdnr_fish_size;
+  param_vector effn_srv1_age;
+  param_vector sdnr_srv1_age;
+  param_vector effn_srv1_size;
+  param_vector sdnr_srv1_size;
+  param_vector effn_srv2_size;
+  param_vector sdnr_srv2_size;
+  param_stddev_vector tot_biom;
+  param_stddev_number q_srv1;
+  param_number q_srv2;
+  param_stddev_vector pred_rec;
+  param_vector expl_rate;
+  param_stddev_number avg_rec;
+  param_stddev_number spbiom_trend;
+  param_number Depletion;
+  param_stddev_vector spawn_biom;
+  param_number natmort;
+  param_stddev_number LMR;
+  param_stddev_number cigar;
+  param_stddev_number q2;
+  param_stddev_number nattymort;
+  param_init_bounded_number mF50;
+  param_init_bounded_number mF40;
+  param_init_bounded_number mF35;
+  param_stddev_number F50;
+  param_stddev_number F40;
+  param_stddev_number F35;
+  param_number SB0;
+  param_number SBF50;
+  param_number SBF40;
+  param_number SBF35;
+  param_number sprpen;
+  param_matrix Nspr;
+  param_vector surv_like;
+  param_number cpue_like;
+  param_vector age_like;
+  param_vector offset;
+  param_number rec_like;
+  param_number ssqcatch;
+  param_number F_mort_regularity;
+  param_number avg_sel_penalty;
+  param_vector priors;
+  param_number Like;
+  param_number prior_function_value;
+  param_number likelihood_function_value;
+  objective_function_value obj_fun;
+  param_vector pred_catch;
+  param_vector obs_catch;
+  param_matrix N_proj;
+  param_number FABC_proj;
+  param_vector FABC_tot_proj;
+  param_number FOFL_proj;
+  param_vector FOFL_tot_proj;
+  param_stddev_number ABC;
+  param_stddev_number B40;
+  param_number OFL;
+  param_vector Z_proj;
+  param_vector ZOFL_proj;
+  param_vector S_proj;
+  param_matrix catage_proj;
+  param_matrix catage_proj_OFL;
+  param_vector pred_catch_proj;
+  param_vector pred_catch_proj_OFL;
+  param_stddev_vector spawn_biom_proj;
+  param_stddev_vector tot_biom_proj;
+  param_number stdev_rec;
+  param_number FOFL;
+  param_number FABC;
+  param_number FOFL2;
+  param_number FABC2;
+public:
+  virtual void userfunction(void);
+  virtual void report(const dvector& gradients);
+  virtual void final_calcs(void);
+  model_parameters(int sz,int argc, char * argv[]);
+  virtual void initializationfunction(void);
+  void Get_Selectivity(void);
+  void Get_Maturity(void);
+  void Get_Mortality_Rates(void);
+  void Get_Numbers_At_Age(void);
+  void Get_Catch_at_Age(void);
+  void Get_Predicted_Values(void);
+  void Get_Dependent_Vars(void);
+  void Compute_SPR_Rates(void);
+  void Get_Population_Projection(void);
+  void Evaluate_Objective_Function(void);
+  void Catch_Like(void);
+  void Surv_Like(void);
+  void Size_Age_Like(void);
+  void Maturity_Like(void);
+  void Calc_Priors(void);
+  void Rec_Like(void);
+  void F_Like(void);
+ double round(double r);
+ double sdnr(const dvar_vector& pred,const dvector& obs,double m);
+  void write_proj(void);
+
+};
+#endif
