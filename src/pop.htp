@@ -345,6 +345,7 @@ public:
  double round(double r);
  double sdnr(const dvar_vector& pred,const dvector& obs,double m);
   void write_proj(void);
+  void Write_R(void);
 
 };
 #endif

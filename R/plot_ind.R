@@ -27,7 +27,7 @@
 }
 
 
-#' Plot predicted index values
+#' Plot predicted spawning stock biomass (ssb)
 #'
 #'
 #' @param M List object(s) created by read_admb function

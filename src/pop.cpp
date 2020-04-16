@@ -1165,7 +1165,9 @@ void model_parameters::report(const dvector& gradients)
                           
    cout<<"-------------Finished: "<<current_phase()<<" "<<Like<<" "<<age_like<<endl;
   if (last_phase())
+  {
     write_proj();
+  }
   report<<"~~~~~~~ Executive Summary Material ~~~~~~~"<<endl;report<<endl;
   report<<"     Model name"<<endl;
   report<<model_name<<endl;
@@ -1367,12 +1369,18 @@ void model_parameters::write_proj(void)
 
 void model_parameters::final_calcs()
 {
+  Write_R() ;
+}
+
+void model_parameters::Write_R(void)
+{
+  ofstream& evalout= *pad_evalout;
   // R_Report(fish_sel);
-  R_report<<"#Selectivity"<<endl; 
+  R_report<<"Selectivity"<<endl; 
   for (i=styr;i<=endyr;i++) 
     R_report<<i<<" "<<fish_sel(i)<<endl;
     // sdreport_vector      spawn_biom(styr,endyr);                 // " " for spawning biomass vector
-  R_report<<"#SSB"<<endl; 
+  R_report<<"SSB"<<endl; 
   for (i=styr;i<=endyr;i++) 
   {
     // sdreport_vector      spawn_biom(styr,endyr);                 // " " for spawning biomass vector
@@ -1380,7 +1388,7 @@ void model_parameters::final_calcs()
     double ub=value(spawn_biom(i)*exp(2.*sqrt(log(1+square(spawn_biom.sd(i))/square(spawn_biom(i))))));
     R_report<<i<<" "<<spawn_biom(i)<<" "<<spawn_biom.sd(i)<<" "<<lb<<" "<<ub<<endl;
   }
-  R_report<<"#R"<<endl; 
+  R_report<<"R"<<endl; 
   for (i=styr;i<=endyr;i++) 
   {
     // sdreport_vector      pred_rec(styr,endyr);                   // " " for predicted recruitments

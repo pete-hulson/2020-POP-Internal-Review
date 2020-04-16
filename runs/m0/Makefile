@@ -1,9 +1,6 @@
 EXEC = pop
-ifeq ($(SAFE),TRUE)
-	DIST = ../src/
-else
-	DIST = ../src/
-endif
+DIST = ../../src/
+
 ARGS = -nox -iprint 150 
 
 ifdef ComSpec
@@ -20,7 +17,7 @@ $(EXEC): $(DIST)$(EXEC).tpl
 
 
 mpd: $(EXEC)
-	$(MAKE) --directory=../src
+	$(MAKE) --directory=../../src
 	./$(EXEC) $(ARGS)
 	@$(RM) $(EXEC).*[0123456789] *.rpt *.log variance gradient.* *tmp admodel.* *.eva
 

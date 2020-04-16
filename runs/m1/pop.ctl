@@ -1,5 +1,5 @@
 Model_1	# model_name
-../data/goa_pop_2019.dat	# data_file
+../../data/goa_pop_2019.dat	# data_file
 1961	# styr_rec_est
 2017	# endyr_rec_est
 2	# ph_Fdev
@@ -37,7 +37,7 @@ Model_1	# model_name
 3	# initial_LMR
 0.930281561198426	# yieldratio
 2 # fishselopt 1 = exp logist, 2=double logistic, 3=bicubic
-2 2 12 # Initial values...for 3par double logistic
+2 3 18 # Initial values...for 3par double logistic
 3 # num_yrs_sel_ch or 
 1977 1996 2006 # yrs_sel_ch
 0.7 0.7 0.7 # sigma_sel_ch
