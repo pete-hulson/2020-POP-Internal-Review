@@ -90,12 +90,13 @@ DATA_SECTION
   init_number          initial_LMR                             // Initial value for log mean recruitment
   init_number          yieldratio                              // Ratio of catch to ABC over most recent 3 years
   init_int             fishselopt                              // Option for selectivity type
+  init_vector          selp_in(1,3)                            // If option 2 (double logistic) initial param values...
   init_int             num_yrs_sel_ch                          // number of years selectivity changes
        int             n_sel_ch_fsh                            // number of years selectivity changes
   init_ivector         yrs_sel_ch(1,num_yrs_sel_ch)            // years selectivity changes
   init_vector          sigma_sel_ch(1,num_yrs_sel_ch)          // sigma (cv) of selectivity changes
   !!  if (fishselopt==2) {ph_fish_sel_dlog=ph_fish_sel; ph_fish_sel=-1;} else {ph_fish_sel_dlog=-1; }
-  !!  n_sel_ch_fsh=num_yrs_sel_ch+1;
+  !!  n_sel_ch_fsh=num_yrs_sel_ch;
 
 //==============================================================================================================================
 
@@ -113,7 +114,7 @@ DATA_SECTION
   init_int             n_sizeage_mat
   init_vector          len_bin_labels(1,nlenbins)
   ivector              age_vector(1,nages_M)
-  !! for (int j=recage;j<=recage+nages_M-1;j++) age_vector = j;
+  !! for (int j=recage;j<=recage+nages_M-1;j++) age_vector(j-recage+1) = j;
   int                  styr_rec
   int                  styr_sp
   int                  endyr_sp
@@ -273,6 +274,7 @@ INITIALIZATION_SECTION
   delta_srv1           3.8
   a50_srv2             7.3
   delta_srv2           3.8
+  selp                 selp_in
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //==============================================================================================================================
@@ -292,7 +294,7 @@ PARAMETER_SECTION
   init_number          delta2(ph_fish_sel);                    // age between 50% selection and 95% selection....
   init_number          a503(ph_fish_sel);                      // age at 50% selection                                                   
   init_number          delta3(ph_fish_sel);                    // age between 50% selection and 95% selection....
-	init_matrix          selp(1,3,1,n_sel_ch_fsh,ph_fish_sel_dlog) // 3 par double logistic, p1=age 5% select, p2=dist from 5% to 95%, p3= dist from "95%" and desc 5%
+	init_vector_vector   selp(1,3,0,n_sel_ch_fsh,ph_fish_sel_dlog) // 3 par double logistic, p1=age 5% select, p2=dist from 5% to 95%, p3= dist from "95%" and desc 5%
   number               expa50;                                 // gamma selectivity parameter
   number               expa502;                                // gamma selectivity parameter
   vector               fish_sel1(1,nages_M);                    // vectory of fishery selectivty parameters on arithmetic scale
@@ -511,12 +513,13 @@ FUNCTION Get_Selectivity
       sel_p1_fsh(k)  = mfexp(logsel_p1_fsh(k));
       sel_p3_fsh(k)  = mfexp(logsel_p3_fsh(k));
       */
-      int isel_ch_tmp = 1 ;
+      int isel_ch_tmp = 0 ; // base year 
       dvariable p1 = selp(1,isel_ch_tmp);
       dvariable p2 = selp(2,isel_ch_tmp);
       dvariable p3 = selp(3,isel_ch_tmp);
       dvariable i1 = p1 + p2;
       dvariable i2 = p1 + i1 + p3;
+      isel_ch_tmp++;
       
       for (i=styr;i<=endyr;i++)
       {
@@ -532,7 +535,7 @@ FUNCTION Get_Selectivity
         }
         fish_sel(i) = exp( ( -log(1.0 + mfexp(-2.9444389792/p1 * ( age_vector - i1) )) +
                log(1. - 1./(1.0 + mfexp(-2.9444389792/p3 * ( age_vector - i2))) ) )+0.102586589) ; // constant at end is log(0.95*0.95)
-      // cout << p1 << " "<<p2<<" "<<p3<<endl<<i1<<" "<<i2<<endl<<age_vector<<endl<<sel_fsh(k,i)<<endl;exit(1);
+       // cout << p1 << " "<<p2<<" "<<p3<<endl<<i1<<" "<<i2<<endl<<age_vector<<endl<<fish_sel(i)<<endl;exit(1);
       }
     break;
     }
@@ -748,31 +751,35 @@ FUNCTION Compute_SPR_Rates
   SBF40=0.;
   SBF35=0.;
 
+  dvar_vector seltmp = fish_sel(endyr);
   // Scale F-spr rates to be on full-selected values
-  F50  = mF50*max(fish_sel4);
-  F40  = mF40*max(fish_sel4);
-  F35  = mF35*max(fish_sel4);
+  // Ianelli commented this out...shouldn't need right?
+  F50  = mF50*max(seltmp);
+  F40  = mF40*max(seltmp);
+  F35  = mF35*max(seltmp);
+  /*
+  */
   for (i=1;i<=4;i++)
     Nspr(i,1)=1.;
   
   for (j=2;j<nages_M;j++) {
     Nspr(1,j)=Nspr(1,j-1)*mfexp(-1.*natmort);
-    Nspr(2,j)=Nspr(2,j-1)*mfexp(-1.*(natmort+mF50*fish_sel4(j-1)));
-    Nspr(3,j)=Nspr(3,j-1)*mfexp(-1.*(natmort+mF40*fish_sel4(j-1)));
-    Nspr(4,j)=Nspr(4,j-1)*mfexp(-1.*(natmort+mF35*fish_sel4(j-1)));
+    Nspr(2,j)=Nspr(2,j-1)*mfexp(-1.*(natmort+mF50*seltmp(j-1)));
+    Nspr(3,j)=Nspr(3,j-1)*mfexp(-1.*(natmort+mF40*seltmp(j-1)));
+    Nspr(4,j)=Nspr(4,j-1)*mfexp(-1.*(natmort+mF35*seltmp(j-1)));
   }
 
   Nspr(1,nages_M)=Nspr(1,nages_M-1)*mfexp(-1.*natmort)/(1.-mfexp(-1.*natmort));
-  Nspr(2,nages_M)=Nspr(2,nages_M-1)*mfexp(-1.* (natmort+mF50*fish_sel4(nages_M-1)))/(1.-mfexp(-1.*(natmort+mF50*fish_sel4(nages_M))));
-  Nspr(3,nages_M)=Nspr(3,nages_M-1)*mfexp(-1.* (natmort+mF40*fish_sel4(nages_M-1)))/ (1.-mfexp(-1.*(natmort+mF40*fish_sel4(nages_M))));
-  Nspr(4,nages_M)=Nspr(4,nages_M-1)*mfexp(-1.* (natmort+mF35*fish_sel4(nages_M-1)))/ (1.-mfexp(-1.*(natmort+mF35*fish_sel4(nages_M))));
+  Nspr(2,nages_M)=Nspr(2,nages_M-1)*mfexp(-1.* (natmort+mF50*seltmp(nages_M-1)))/(1.-mfexp(-1.*(natmort+mF50*seltmp(nages_M))));
+  Nspr(3,nages_M)=Nspr(3,nages_M-1)*mfexp(-1.* (natmort+mF40*seltmp(nages_M-1)))/ (1.-mfexp(-1.*(natmort+mF40*seltmp(nages_M))));
+  Nspr(4,nages_M)=Nspr(4,nages_M-1)*mfexp(-1.* (natmort+mF35*seltmp(nages_M-1)))/ (1.-mfexp(-1.*(natmort+mF35*seltmp(nages_M))));
   
   for (j=1;j<=nages_M;j++) {
    // Kill them off till (spawn_fract)
     SB0    += Nspr(1,j)*wt_mature(j)*mfexp(-spawn_fract*natmort);
-    SBF50  += Nspr(2,j)*wt_mature(j)*mfexp(-spawn_fract*(natmort+mF50*fish_sel4(j)));
-    SBF40  += Nspr(3,j)*wt_mature(j)*mfexp(-spawn_fract*(natmort+mF40*fish_sel4(j)));
-    SBF35  += Nspr(4,j)*wt_mature(j)*mfexp(-spawn_fract*(natmort+mF35*fish_sel4(j)));
+    SBF50  += Nspr(2,j)*wt_mature(j)*mfexp(-spawn_fract*(natmort+mF50*seltmp(j)));
+    SBF40  += Nspr(3,j)*wt_mature(j)*mfexp(-spawn_fract*(natmort+mF40*seltmp(j)));
+    SBF35  += Nspr(4,j)*wt_mature(j)*mfexp(-spawn_fract*(natmort+mF35*seltmp(j)));
   }
   
   sprpen    = 100.*square(SBF50/SB0-0.5);
@@ -816,8 +823,8 @@ FUNCTION Get_Population_Projection
       FABC_proj = F40 * (spawn_biom_proj(i)/B40 - 0.05)/(1 - 0.05); 
       FOFL_proj = F35 * (spawn_biom_proj(i)/B40 - 0.05)/(1 - 0.05); }
     for (j=1;j<=nages_M;j++) {  
-      FOFL_tot_proj(j) = fish_sel4(j) * FOFL_proj;
-      FABC_tot_proj(j) = fish_sel4(j) * FABC_proj;
+      FOFL_tot_proj(j) = fish_sel(endyr,j) * FOFL_proj;
+      FABC_tot_proj(j) = fish_sel(endyr,j) * FABC_proj;
       Z_proj(j) = FABC_tot_proj(j) + natmort;
       ZOFL_proj(j) = FOFL_tot_proj(j) + natmort;
       S_proj(j) = mfexp(-1.0 * Z_proj(j));
@@ -1242,7 +1249,32 @@ FUNCTION write_proj
 
 FINAL_SECTION
 //==============================================================================================================================
-  R_Report(fish_sel);
+  // R_Report(fish_sel);
+  R_report<<"#Selectivity"<<endl; 
+  for (i=styr;i<=endyr;i++) 
+    R_report<<i<<" "<<fish_sel(i)<<endl;
+
+    // sdreport_vector      spawn_biom(styr,endyr);                 // " " for spawning biomass vector
+  R_report<<"#SSB"<<endl; 
+  for (i=styr;i<=endyr;i++) 
+  {
+    // sdreport_vector      spawn_biom(styr,endyr);                 // " " for spawning biomass vector
+    double lb=value(spawn_biom(i)/exp(2.*sqrt(log(1+square(spawn_biom.sd(i))/square(spawn_biom(i))))));
+    double ub=value(spawn_biom(i)*exp(2.*sqrt(log(1+square(spawn_biom.sd(i))/square(spawn_biom(i))))));
+    R_report<<i<<" "<<spawn_biom(i)<<" "<<spawn_biom.sd(i)<<" "<<lb<<" "<<ub<<endl;
+  }
+
+  R_report<<"#R"<<endl; 
+  for (i=styr;i<=endyr;i++) 
+  {
+    // sdreport_vector      pred_rec(styr,endyr);                   // " " for predicted recruitments
+    double lb=value(pred_rec(i)/exp(2.*sqrt(log(1+square(pred_rec.sd(i))/square(pred_rec(i))))));
+    double ub=value(pred_rec(i)*exp(2.*sqrt(log(1+square(pred_rec.sd(i))/square(pred_rec(i))))));
+    R_report<<i<<" "<<pred_rec(i)<<" "<<pred_rec.sd(i)<<" "<<lb<<" "<<ub<<endl;
+  }
+
+
+
 //==============================================================================================================================
 GLOBALS_SECTION
 //==============================================================================================================================

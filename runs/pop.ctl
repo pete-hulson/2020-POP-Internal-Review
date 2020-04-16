@@ -36,7 +36,8 @@ Model_1	# model_name
 1	# wt_avg_sel
 3	# initial_LMR
 0.930281561198426	# yieldratio
-1 # fishselopt 1 = exp logist, 2=double logistic, 3=bicubic
-1 # num_yrs_sel_ch or 
-1980 # yrs_sel_ch
-0.7 # sigma_sel_ch
+2 # fishselopt 1 = exp logist, 2=double logistic, 3=bicubic
+2 2 12 # Initial values...for 3par double logistic
+3 # num_yrs_sel_ch or 
+1977 1996 2006 # yrs_sel_ch
+0.7 0.7 0.7 # sigma_sel_ch

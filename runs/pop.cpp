@@ -23,6 +23,7 @@
 #ifdef USE_ADMB_CONTRIBS
 #include <contrib.h>
 
+#include <gdbprintlib.cpp>
 #endif
   extern "C"  {
     void ad_boundf(int i);
@@ -107,12 +108,11 @@ model_data::model_data(int argc,char * argv[]) : ad_comm(argc,argv)
   initial_LMR.allocate("initial_LMR");
   yieldratio.allocate("yieldratio");
   fishselopt.allocate("fishselopt");
-  selp_in.allocate(1,3,"selp_in");
   num_yrs_sel_ch.allocate("num_yrs_sel_ch");
   yrs_sel_ch.allocate(1,num_yrs_sel_ch,"yrs_sel_ch");
   sigma_sel_ch.allocate(1,num_yrs_sel_ch,"sigma_sel_ch");
   if (fishselopt==2) {ph_fish_sel_dlog=ph_fish_sel; ph_fish_sel=-1;} else {ph_fish_sel_dlog=-1; }
-  n_sel_ch_fsh=num_yrs_sel_ch;
+  n_sel_ch_fsh=num_yrs_sel_ch+1;
  ad_comm::change_datafile_name(data_file);                 // Read data from the data file
   styr.allocate("styr");
   endyr.allocate("endyr");
@@ -124,7 +124,7 @@ model_data::model_data(int argc,char * argv[]) : ad_comm(argc,argv)
   n_sizeage_mat.allocate("n_sizeage_mat");
   len_bin_labels.allocate(1,nlenbins,"len_bin_labels");
   age_vector.allocate(1,nages_M);
- for (int j=recage;j<=recage+nages_M-1;j++) age_vector(j-recage+1) = j;
+ for (int j=recage;j<=recage+nages_M-1;j++) age_vector = j;
   nyrs = endyr - styr + 1;
  styr_rec = (styr - nages_M) + 1;                          // First year of recruitment
  styr_sp  = styr_rec - recage ;                            // First year of spawning biomass  
@@ -229,7 +229,7 @@ void model_parameters::initializationfunction(void)
   delta_srv1.set_initial_value(3.8);
   a50_srv2.set_initial_value(7.3);
   delta_srv2.set_initial_value(3.8);
-  selp.set_initial_value(selp_in);
+  selp.set_initial_value(3.);
   if (global_datafile)
   {
     delete global_datafile;
@@ -253,7 +253,7 @@ model_parameters::model_parameters(int sz,int argc,char * argv[]) :
   delta2.allocate(ph_fish_sel,"delta2");
   a503.allocate(ph_fish_sel,"a503");
   delta3.allocate(ph_fish_sel,"delta3");
-  selp.allocate(1,3,0,n_sel_ch_fsh,ph_fish_sel_dlog,"selp");
+  selp.allocate(1,3,1,n_sel_ch_fsh,ph_fish_sel_dlog,"selp");
   expa50.allocate("expa50");
   #ifndef NO_AD_INITIALIZE
   expa50.initialize();
@@ -708,13 +708,12 @@ void model_parameters::Get_Selectivity(void)
       sel_p1_fsh(k)  = mfexp(logsel_p1_fsh(k));
       sel_p3_fsh(k)  = mfexp(logsel_p3_fsh(k));
       */
-      int isel_ch_tmp = 0 ; // base year 
+      int isel_ch_tmp = 1 ;
       dvariable p1 = selp(1,isel_ch_tmp);
       dvariable p2 = selp(2,isel_ch_tmp);
       dvariable p3 = selp(3,isel_ch_tmp);
       dvariable i1 = p1 + p2;
       dvariable i2 = p1 + i1 + p3;
-      isel_ch_tmp++;
       
       for (i=styr;i<=endyr;i++)
       {
@@ -730,7 +729,7 @@ void model_parameters::Get_Selectivity(void)
         }
         fish_sel(i) = exp( ( -log(1.0 + mfexp(-2.9444389792/p1 * ( age_vector - i1) )) +
                log(1. - 1./(1.0 + mfexp(-2.9444389792/p3 * ( age_vector - i2))) ) )+0.102586589) ; // constant at end is log(0.95*0.95)
-       // cout << p1 << " "<<p2<<" "<<p3<<endl<<i1<<" "<<i2<<endl<<age_vector<<endl<<fish_sel(i)<<endl;exit(1);
+      // cout << p1 << " "<<p2<<" "<<p3<<endl<<i1<<" "<<i2<<endl<<age_vector<<endl<<sel_fsh(k,i)<<endl;exit(1);
       }
     break;
     }
@@ -912,34 +911,30 @@ void model_parameters::Compute_SPR_Rates(void)
   SBF50=0.;
   SBF40=0.;
   SBF35=0.;
-  dvar_vector seltmp = fish_sel(endyr);
   // Scale F-spr rates to be on full-selected values
-  // Ianelli commented this out...shouldn't need right?
-  F50  = mF50*max(seltmp);
-  F40  = mF40*max(seltmp);
-  F35  = mF35*max(seltmp);
-  /*
-  */
+  F50  = mF50*max(fish_sel4);
+  F40  = mF40*max(fish_sel4);
+  F35  = mF35*max(fish_sel4);
   for (i=1;i<=4;i++)
     Nspr(i,1)=1.;
   
   for (j=2;j<nages_M;j++) {
     Nspr(1,j)=Nspr(1,j-1)*mfexp(-1.*natmort);
-    Nspr(2,j)=Nspr(2,j-1)*mfexp(-1.*(natmort+mF50*seltmp(j-1)));
-    Nspr(3,j)=Nspr(3,j-1)*mfexp(-1.*(natmort+mF40*seltmp(j-1)));
-    Nspr(4,j)=Nspr(4,j-1)*mfexp(-1.*(natmort+mF35*seltmp(j-1)));
+    Nspr(2,j)=Nspr(2,j-1)*mfexp(-1.*(natmort+mF50*fish_sel4(j-1)));
+    Nspr(3,j)=Nspr(3,j-1)*mfexp(-1.*(natmort+mF40*fish_sel4(j-1)));
+    Nspr(4,j)=Nspr(4,j-1)*mfexp(-1.*(natmort+mF35*fish_sel4(j-1)));
   }
   Nspr(1,nages_M)=Nspr(1,nages_M-1)*mfexp(-1.*natmort)/(1.-mfexp(-1.*natmort));
-  Nspr(2,nages_M)=Nspr(2,nages_M-1)*mfexp(-1.* (natmort+mF50*seltmp(nages_M-1)))/(1.-mfexp(-1.*(natmort+mF50*seltmp(nages_M))));
-  Nspr(3,nages_M)=Nspr(3,nages_M-1)*mfexp(-1.* (natmort+mF40*seltmp(nages_M-1)))/ (1.-mfexp(-1.*(natmort+mF40*seltmp(nages_M))));
-  Nspr(4,nages_M)=Nspr(4,nages_M-1)*mfexp(-1.* (natmort+mF35*seltmp(nages_M-1)))/ (1.-mfexp(-1.*(natmort+mF35*seltmp(nages_M))));
+  Nspr(2,nages_M)=Nspr(2,nages_M-1)*mfexp(-1.* (natmort+mF50*fish_sel4(nages_M-1)))/(1.-mfexp(-1.*(natmort+mF50*fish_sel4(nages_M))));
+  Nspr(3,nages_M)=Nspr(3,nages_M-1)*mfexp(-1.* (natmort+mF40*fish_sel4(nages_M-1)))/ (1.-mfexp(-1.*(natmort+mF40*fish_sel4(nages_M))));
+  Nspr(4,nages_M)=Nspr(4,nages_M-1)*mfexp(-1.* (natmort+mF35*fish_sel4(nages_M-1)))/ (1.-mfexp(-1.*(natmort+mF35*fish_sel4(nages_M))));
   
   for (j=1;j<=nages_M;j++) {
    // Kill them off till (spawn_fract)
     SB0    += Nspr(1,j)*wt_mature(j)*mfexp(-spawn_fract*natmort);
-    SBF50  += Nspr(2,j)*wt_mature(j)*mfexp(-spawn_fract*(natmort+mF50*seltmp(j)));
-    SBF40  += Nspr(3,j)*wt_mature(j)*mfexp(-spawn_fract*(natmort+mF40*seltmp(j)));
-    SBF35  += Nspr(4,j)*wt_mature(j)*mfexp(-spawn_fract*(natmort+mF35*seltmp(j)));
+    SBF50  += Nspr(2,j)*wt_mature(j)*mfexp(-spawn_fract*(natmort+mF50*fish_sel4(j)));
+    SBF40  += Nspr(3,j)*wt_mature(j)*mfexp(-spawn_fract*(natmort+mF40*fish_sel4(j)));
+    SBF35  += Nspr(4,j)*wt_mature(j)*mfexp(-spawn_fract*(natmort+mF35*fish_sel4(j)));
   }
   
   sprpen    = 100.*square(SBF50/SB0-0.5);
@@ -975,8 +970,8 @@ void model_parameters::Get_Population_Projection(void)
       FABC_proj = F40 * (spawn_biom_proj(i)/B40 - 0.05)/(1 - 0.05); 
       FOFL_proj = F35 * (spawn_biom_proj(i)/B40 - 0.05)/(1 - 0.05); }
     for (j=1;j<=nages_M;j++) {  
-      FOFL_tot_proj(j) = fish_sel(endyr,j) * FOFL_proj;
-      FABC_tot_proj(j) = fish_sel(endyr,j) * FABC_proj;
+      FOFL_tot_proj(j) = fish_sel4(j) * FOFL_proj;
+      FABC_tot_proj(j) = fish_sel4(j) * FABC_proj;
       Z_proj(j) = FABC_tot_proj(j) + natmort;
       ZOFL_proj(j) = FOFL_tot_proj(j) + natmort;
       S_proj(j) = mfexp(-1.0 * Z_proj(j));
@@ -1367,27 +1362,7 @@ void model_parameters::write_proj(void)
 
 void model_parameters::final_calcs()
 {
-  // R_Report(fish_sel);
-  R_report<<"#Selectivity"<<endl; 
-  for (i=styr;i<=endyr;i++) 
-    R_report<<i<<" "<<fish_sel(i)<<endl;
-    // sdreport_vector      spawn_biom(styr,endyr);                 // " " for spawning biomass vector
-  R_report<<"#SSB"<<endl; 
-  for (i=styr;i<=endyr;i++) 
-  {
-    // sdreport_vector      spawn_biom(styr,endyr);                 // " " for spawning biomass vector
-    double lb=value(spawn_biom(i)/exp(2.*sqrt(log(1+square(spawn_biom.sd(i))/square(spawn_biom(i))))));
-    double ub=value(spawn_biom(i)*exp(2.*sqrt(log(1+square(spawn_biom.sd(i))/square(spawn_biom(i))))));
-    R_report<<i<<" "<<spawn_biom(i)<<" "<<spawn_biom.sd(i)<<" "<<lb<<" "<<ub<<endl;
-  }
-  R_report<<"#R"<<endl; 
-  for (i=styr;i<=endyr;i++) 
-  {
-    // sdreport_vector      pred_rec(styr,endyr);                   // " " for predicted recruitments
-    double lb=value(pred_rec(i)/exp(2.*sqrt(log(1+square(pred_rec.sd(i))/square(pred_rec(i))))));
-    double ub=value(pred_rec(i)*exp(2.*sqrt(log(1+square(pred_rec.sd(i))/square(pred_rec(i))))));
-    R_report<<i<<" "<<pred_rec(i)<<" "<<pred_rec.sd(i)<<" "<<lb<<" "<<ub<<endl;
-  }
+  R_Report(fish_sel);
 }
 
 void model_parameters::preliminary_calculations(void){

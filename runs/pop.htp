@@ -49,7 +49,6 @@ class model_data : public ad_comm{
   data_number initial_LMR;
   data_number yieldratio;
   data_int fishselopt;
-  data_vector selp_in;
   data_int num_yrs_sel_ch;
   int n_sel_ch_fsh;
   data_ivector yrs_sel_ch;
@@ -193,7 +192,7 @@ private:
   param_init_number delta2;
   param_init_number a503;
   param_init_number delta3;
-  param_init_vector_vector selp;
+  param_init_matrix selp;
   param_number expa50;
   param_number expa502;
   param_vector fish_sel1;
