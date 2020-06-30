@@ -8,13 +8,13 @@ Model_1	# model_name
 3	# ph_fish_sel
 3	# ph_srv1_sel
 -3	# ph_srv2_sel
-0.05	# mprior
+0.0614	# mprior
 0.1	# cvmprior
 2	# ph_m
 1.7	# sigrprior
 0.2	# cvsigrprior
 2	# ph_sigr
-1	# q_srv1prior
+1.15	# q_srv1prior
 0.447213595	# cvq_srv1prior
 3	# ph_q_srv1
 1	# q_srv2prior
@@ -39,5 +39,7 @@ Model_1	# model_name
 2 # fishselopt 1 = exp logist, 2=double logistic, 3=bicubic
 2 2 12 # Initial values...for 3par double logistic
 3 # num_yrs_sel_ch or 
-1977 1996 2006 # yrs_sel_ch
+1977 1996 2007 # yrs_sel_ch
 0.7 0.7 0.7 # sigma_sel_ch
+3 # Year blocks in recruitment (R_Bk)
+1961 1978 2000 2019 # Years for recuiment breaks - defines first year of new block (R_Bk_Yrs)
