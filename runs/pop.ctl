@@ -5,6 +5,8 @@ Model_1	# model_name
 2	# ph_Fdev
 1	# ph_avg_F
 2	# ph_recdev
+2   # ph_fydev
+2   # ph_historic_F
 3	# ph_fish_sel
 3	# ph_srv1_sel
 -3	# ph_srv2_sel
@@ -32,11 +34,14 @@ Model_1	# model_name
 0	# wt_srv1_size
 0	# wt_srv2_size
 1	# wt_rec_var
+1   # wt_fy_var
+1   # wt_hf_pen
 0.1	# wt_fmort_reg
 1	# wt_avg_sel
 3	# initial_LMR
 0.930281561198426	# yieldratio
 2 # fishselopt 1 = exp logist, 2=double logistic, 3=bicubic
+1 # first year natage option (1=stochastic, 2= equilibrium)
 2 2 12 # Initial values...for 3par double logistic
 3 # num_yrs_sel_ch or 
 1977 1996 2007 # yrs_sel_ch

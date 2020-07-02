@@ -48,6 +48,8 @@ DATA_SECTION
   init_int             ph_Fdev                                 // Phase for fishing mortality deviations
   init_int             ph_avg_F                                // Phase for estimating average fishing mortality
   init_int             ph_recdev                               // Phase for estimating recruitment deviations
+  init_int             ph_fydev                                // Phase for estimating first year deviations
+  init_int             ph_historic_F                           // Phase for estimating historic F
   init_int             ph_fish_sel                             // Phase for estimating fishing selectivity
        int             ph_fish_sel_dlog                        // Phase for estimating fishing selectivity
   init_int             ph_srv1_sel                             // Phase for estimating survey selectivity
@@ -86,11 +88,14 @@ DATA_SECTION
   init_number          wt_srv1_size                            // Weight for survey size compostiions
   init_number          wt_srv2_size                            // Weight for survey size compostiions
   init_number          wt_rec_var                              // Weight for estimation recruitment variatiions penalty
+  init_number          wt_fy_var                               // Weight for estimation first year variatiions penalty
+  init_number          wt_hf_pen                               // Weight for estimation of historic F
   init_number          wt_fmort_reg                            // Weight on fishing mortality regularity
   init_number          wt_avg_sel                              // Average selectivity penalty
   init_number          initial_LMR                             // Initial value for log mean recruitment
   init_number          yieldratio                              // Ratio of catch to ABC over most recent 3 years
   init_int             fishselopt                              // Option for selectivity type
+  init_int             fyopt                                   // Option for the first year numbers at age
   init_vector          selp_in(1,3)                            // If option 2 (double logistic) initial param values...
   init_int             num_yrs_sel_ch                          // number of years selectivity changes
        int             n_sel_ch_fsh                            // number of years selectivity changes
@@ -144,6 +149,7 @@ DATA_SECTION
 // Observed catches
   init_vector          obs_catch_early(styr,yr_catchwt)
   init_vector          obs_catch_later(yr_catchwt+1,endyr)
+  init_number          historic_catch                          // historic catch for eq first year natage        
   init_int             nyrs_cpue                               // number of years of survey biomass estimates
   init_ivector         yrs_cpue(1,nyrs_cpue)                   // years survey conducted in
   init_vector          obs_cpue(1,nyrs_cpue)                   // mean estimate of biomass
@@ -230,8 +236,8 @@ DATA_SECTION
 //==============================================================================================================================
 
 // Read maturity data from the data file
-  //!! ad_comm::change_datafile_name(mat_file);                 // Read data from the data file
-  !! ad_comm::change_datafile_name("mat.dat");                 // Read data from the data file
+  !! ad_comm::change_datafile_name(mat_file);                 // Read data from the data file
+  //!! ad_comm::change_datafile_name("mat.dat");                 // Read data from the data file
 
   init_int             nages_mat
   init_vector          ages_mat(1,nages_mat)
@@ -259,6 +265,17 @@ DATA_SECTION
    }
 
  END_CALCS
+
+ LOCAL_CALCS
+  // reset phases to take out parameters not being used in the estimation of initial numbers at age
+  if(fyopt==1) ph_historic_F = -1;
+  if(fyopt==2)
+    {
+     ph_fydev = -1;
+     if(historic_catch<0.01) ph_historic_F = -1;
+    }
+ END_CALCS
+
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //==============================================================================================================================
@@ -346,8 +363,13 @@ PARAMETER_SECTION
 // Create a vector of natual mortalities for proj.dat
   vector               natmortv(1,nages_M);
 
+// First year numbers at age
+  init_bounded_vector  fydev(1,nages_M-2,-10,10,ph_fydev)     // recruitment deviations for natage in first year 
+  init_number          historic_F(ph_historic_F)              // historic F for computing first year age comps
+  number               ehc                                    // estimated historic catch
 // Numbers at age
-  init_bounded_vector  log_rec_dev(styr_rec+1,endyr,-10.,10.,ph_recdev); // Recruitment deviations from before the asssessment starts to present
+  
+  init_bounded_vector  log_rec_dev(styr,endyr,-10.,10.,ph_recdev); // Recruitment deviations from styr to present
   matrix               natage(styr,endyr,1,nages_M);           // Matrix of numbers at age from start year to end year
 
 // Biomass at age
@@ -424,6 +446,10 @@ PARAMETER_SECTION
   vector               rec_like_blk(1,R_Bk);
   vector               norm2_recdevs(1,R_Bk);
   vector               szcnt_recdevs(1,R_Bk);
+  number               fy_like;                                // Likelihood value for first year deviations
+  number               hf_pen;                                 // penalty for fitting historic catch
+  number               norm2_fydevs;
+  number               szcnt_fydevs;
   number               ssqcatch;                               // Likelihood value for catch estimation
   number               F_mort_regularity;                      // Penalty value for fishing mortality regularity
   number               avg_sel_penalty;                        // Penalty value for selectivity regularity penalty
@@ -472,6 +498,7 @@ PROCEDURE_SECTION
   Get_Selectivity();                                           // Call function to get selectivities
   Get_Maturity();                                              // Call function to get maturity proportions at age
   Get_Mortality_Rates();                                       // Call function to get fishing and natural mortality
+  Get_First_Year();                                            // Call function to get first year numbers at age
   Get_Numbers_At_Age();                                        // Call function to get numbers at age per year
   Get_Catch_at_Age();                                          // Call function to get catch at age per year
   Get_Predicted_Values();                                      // Get predicted values for catch, survbio, age and size comps
@@ -594,17 +621,56 @@ FUNCTION Get_Mortality_Rates
   Z = F + natmort;                                             // Fully selected total mortality
   S = mfexp(-1.0*Z);                                           // Fully selected survival
 
+
+//==============================================================================================================================
+FUNCTION Get_First_Year  
+//==============================================================================================================================
+// Start year abundance
+  //int itmp;
+  
+  if(fyopt==1) {                       // Option 1 -- stohastic numbers at age in first year
+  for (j=2;j<nages_M;j++) {
+    //itmp = styr+1-j;
+    natage(styr,j) = mfexp(log_mean_rec(1) - natmort * double(j-1)+ fydev(j-1)); 
+  }
+  natage(styr,nages_M) = mfexp(log_mean_rec(1) - natmort * (nages_M-1)) / (1. - exp(-natmort));
+  norm2_fydevs = norm2(fydev);
+  szcnt_fydevs = size_count(fydev);
+  }
+
+  if(fyopt==2) {                     //  Option 2 -- eq first year natage with historic catch
+    natage(styr,1) = mfexp(log_mean_rec(1));
+    for (j=2;j<=nages_M;j++)
+      natage(styr,j) = natage(styr,j-1)*mfexp(-(natmort + historic_F*fish_sel(styr,j-1)));
+    natage(styr,nages_M) /= 1-mfexp(-(historic_F*fish_sel(styr,nages_M)+natmort));   // Plus group for first year
+
+    cout <<  "natage(styr) "  << natage(styr) << endl;  
+
+    if (historic_catch > 0.) {  // estimate the historical catch
+      ehc = 0;
+      for (j=1;j<=nages_M;j++)
+          {
+          ehc += natage(styr,j)*wt(j)*(historic_F*fish_sel(styr,j))*
+                (1.0-mfexp(-(historic_F*fish_sel(styr,j)+natmort)))/(historic_F*fish_sel(styr,j)+natmort);
+          }
+          
+          /*
+          cout << "natage(styr) "  << natage(styr) << endl;
+          cout << "wt " << wt << endl;
+          cout << "historic_F " << historic_F << endl;
+          cout << "fish_sel(styr) "  << fish_sel(styr) << endl;
+          cout << "natmort "  << natmort << endl;
+          cout << "ehc_1 is "  << ehc << endl;
+          */
+
+        }
+  }  
+
+
+
 //==============================================================================================================================
 FUNCTION Get_Numbers_At_Age  
 //==============================================================================================================================
-
-// Start year abundance
-  int itmp;
-  for (j=2;j<nages_M;j++) {
-    itmp = styr+1-j;
-    natage(styr,j) = mfexp(log_mean_rec(1) - natmort * double(j-1)+ log_rec_dev(itmp)); 
-  }
-  natage(styr,nages_M) = mfexp(log_mean_rec(1) - natmort * (nages_M-1)) / (1. - exp(-natmort));
 
 // Remaining years
   for (b=1;b<=R_Bk;b++) {
@@ -908,6 +974,8 @@ FUNCTION Evaluate_Objective_Function
 // Call functions to compute prior penalties
   Calc_Priors();                                               // Prior penalties for estimated parameters
   Rec_Like();                                                  // Penalty function for recruitment
+  if(fyopt==1)  Fy_Like();                                     // Penalty function for first year deviations
+  if(fyopt==2)  Hf_pen();                                      // Penalty function for historic catch 
   F_Like();                                                    // Penalty function for fishing mortality deviations
 
 // Sum objective function
@@ -920,6 +988,11 @@ FUNCTION Evaluate_Objective_Function
   obj_fun           += Like_C;
   obj_fun           += sum(priors);
   obj_fun           += wt_rec_var * rec_like;
+  if(fyopt==1)  
+      obj_fun           += wt_fy_var * fy_like;
+  if(fyopt==2)  
+      obj_fun           += wt_hf_pen * hf_pen;
+  
   if(active(log_F_devs))
     obj_fun         += F_mort_regularity;
   if (current_phase()<3)
@@ -1049,6 +1122,24 @@ FUNCTION Rec_Like
   }
   rec_like = sum(rec_like_blk);
 
+//==============================================================================================================================
+FUNCTION Fy_Like
+//==============================================================================================================================
+
+  fy_like.initialize();
+  fy_like = norm2_fydevs/(2*square(sigr(1))) + szcnt_fydevs*log(sigr(1)); 
+
+//==============================================================================================================================
+FUNCTION Hf_pen
+//==============================================================================================================================
+
+  hf_pen.initialize();
+  cout << "ehc is "  << ehc << endl;
+  cout << "historic_catch is "  << historic_catch << endl;
+  cout << "historic_F is "  << historic_F << endl;
+  
+  hf_pen = square(ehc-historic_catch);
+  
 //==============================================================================================================================
 FUNCTION F_Like
 //==============================================================================================================================
@@ -1327,3 +1418,9 @@ TOP_OF_MAIN_SECTION
   gradient_structure::set_MAX_NVAR_OFFSET(1000);
   gradient_structure::set_GRADSTACK_BUFFER_SIZE(100000);
   gradient_structure::set_NUM_DEPENDENT_VARIABLES(500);
+  arrmblsize = 1000000;
+
+RUNTIME_SECTION //------------------------------------------------------------------------------------------
+    convergence_criteria 1.e-4 1.e-4 1.e-4 1.e-7 1.e-7 1.e-7
+    maximum_function_evaluations 1000, 1000, 1000, 10000, 20000, 20000
+

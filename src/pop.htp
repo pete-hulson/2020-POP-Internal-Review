@@ -1,5 +1,5 @@
-#if !defined(_pop_)
-#  define _pop_
+#if !defined(_POP_)
+#  define _POP_
 
 class model_data : public ad_comm{
   ofstream *   pad_evalout;
@@ -13,6 +13,8 @@ class model_data : public ad_comm{
   data_int ph_Fdev;
   data_int ph_avg_F;
   data_int ph_recdev;
+  data_int ph_fydev;
+  data_int ph_historic_F;
   data_int ph_fish_sel;
   int ph_fish_sel_dlog;
   data_int ph_srv1_sel;
@@ -44,16 +46,21 @@ class model_data : public ad_comm{
   data_number wt_srv1_size;
   data_number wt_srv2_size;
   data_number wt_rec_var;
+  data_number wt_fy_var;
+  data_number wt_hf_pen;
   data_number wt_fmort_reg;
   data_number wt_avg_sel;
   data_number initial_LMR;
   data_number yieldratio;
   data_int fishselopt;
+  data_int fyopt;
   data_vector selp_in;
   data_int num_yrs_sel_ch;
   int n_sel_ch_fsh;
   data_ivector yrs_sel_ch;
   data_vector sigma_sel_ch;
+  data_number R_Bk;
+  data_vector R_Bk_Yrs;
   data_int styr;
   data_int endyr;
   data_int recage;
@@ -76,6 +83,7 @@ class model_data : public ad_comm{
   data_vector wt;
   data_vector obs_catch_early;
   data_vector obs_catch_later;
+  data_number historic_catch;
   data_int nyrs_cpue;
   data_ivector yrs_cpue;
   data_vector obs_cpue;
@@ -131,6 +139,7 @@ class model_data : public ad_comm{
   int i;
   int j;
   int l;
+  int b;
   data_int eof;
   data_int nages_mat;
   data_vector ages_mat;
@@ -150,6 +159,7 @@ public:
   ~model_parameters();
   void preliminary_calculations(void);
   void set_runtime(void);
+  virtual void * mycast(void) {return (void*)this;}
   static int mc_phase(void)
   {
     return initial_params::mc_phase;
@@ -176,17 +186,11 @@ public:
     return *objective_function_value::pobjfun;
   }
 private:
-  dvariable adromb(dvariable(model_parameters::*f)(const dvariable&), double a, double b, int ns)
-  {
-    using namespace std::placeholders;
-    _func func = std::bind(f, this, _1);
-    return function_minimizer::adromb(func, a, b, ns);
-  }
   ivector integer_control_flags;
   dvector double_control_flags;
   param_vector Sp_Biom;
-  param_init_number log_mean_rec;
-  param_init_bounded_number sigr;
+  param_init_vector log_mean_rec;
+  param_init_bounded_vector sigr;
   param_init_number a50;
   param_init_number delta;
   param_init_number a502;
@@ -227,6 +231,9 @@ private:
   param_number zero_pen_mat;
   param_number k;
   param_vector natmortv;
+  param_init_bounded_vector fydev;
+  param_init_number historic_F;
+  param_number ehc;
   param_init_bounded_vector log_rec_dev;
   param_matrix natage;
   param_matrix batage;
@@ -287,10 +294,18 @@ private:
   param_vector age_like;
   param_vector offset;
   param_number rec_like;
+  param_vector rec_like_blk;
+  param_vector norm2_recdevs;
+  param_vector szcnt_recdevs;
+  param_number fy_like;
+  param_number hf_pen;
+  param_number norm2_fydevs;
+  param_number szcnt_fydevs;
   param_number ssqcatch;
   param_number F_mort_regularity;
   param_number avg_sel_penalty;
   param_vector priors;
+  param_vector sigr_prior;
   param_number Like;
   param_number prior_function_value;
   param_number likelihood_function_value;
@@ -328,6 +343,7 @@ public:
   void Get_Selectivity(void);
   void Get_Maturity(void);
   void Get_Mortality_Rates(void);
+  void Get_First_Year(void);
   void Get_Numbers_At_Age(void);
   void Get_Catch_at_Age(void);
   void Get_Predicted_Values(void);
@@ -341,6 +357,8 @@ public:
   void Maturity_Like(void);
   void Calc_Priors(void);
   void Rec_Like(void);
+  void Fy_Like(void);
+  void Hf_pen(void);
   void F_Like(void);
  double round(double r);
  double sdnr(const dvar_vector& pred,const dvector& obs,double m);
