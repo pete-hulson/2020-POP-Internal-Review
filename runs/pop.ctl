@@ -34,7 +34,7 @@ Model_1	# model_name
 0	# wt_srv1_size
 0	# wt_srv2_size
 1	# wt_rec_var
-1   # wt_fy_var
+0   # wt_fy_var
 1   # wt_hf_pen
 0.1	# wt_fmort_reg
 1	# wt_avg_sel
