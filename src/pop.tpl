@@ -50,8 +50,11 @@ DATA_SECTION
   init_int             ph_recdev                               // Phase for estimating recruitment deviations
   init_int             ph_fydev                                // Phase for estimating first year deviations
   init_int             ph_historic_F                           // Phase for estimating historic F
-  init_int             ph_fish_sel                             // Phase for estimating fishing selectivity
-       int             ph_fish_sel_dlog                        // Phase for estimating fishing selectivity
+  init_int             ph_fish_sel                             // Phase for estimating fishing selectivity (option 1)
+  init_int             ph_fish_sel_dlog                        // Phase for estimating fishing selectivity (option 2)
+       int             ph_fish_sel_doublelog                   // Phase as integer
+  !!                   ph_fish_sel_doublelog = ph_fish_sel_dlog;        
+  init_int             ph_cubic_sel                            // Phase for estimating fishing selectivity (option 3)
   init_int             ph_srv1_sel                             // Phase for estimating survey selectivity
   init_int             ph_srv2_sel                             // Phase for estimating survey selectivity
 
@@ -101,11 +104,21 @@ DATA_SECTION
        int             n_sel_ch_fsh                            // number of years selectivity changes
   init_ivector         yrs_sel_ch(1,num_yrs_sel_ch)            // years selectivity changes
   init_vector          sigma_sel_ch(1,num_yrs_sel_ch)          // sigma (cv) of selectivity changes
-  !!  if (fishselopt==2) {ph_fish_sel_dlog=ph_fish_sel; ph_fish_sel=-1;} else {ph_fish_sel_dlog=-1; }
   !!  n_sel_ch_fsh=num_yrs_sel_ch;
   init_number R_Bk
   init_vector R_Bk_Yrs(1,R_Bk+1)
-
+  init_int            n_yr_nodes                              // number of year nodes for bicubic spline selectivity
+  init_int            n_age_nodes                             // number of age nodes for bicubic, and cubic, spline selectivity
+  int                 isel_npar                               // generalized number of nodes for sel_par
+  int                 jsel_npar                               // generalized number of nodes for sel_par
+  init_number         wt_spl_avg                              // penalty from avg across ages being different from 0 (affects scale of selectivity)
+  init_number         wt_spl_dome                             // penalty on on selectivity dome-shape (controls descending parts across ages)
+  init_number         wt_spl_2d_ages                          // penalty on selectivity smoothness [second difference] across ages
+  init_number         wt_spl_1d_yrs                           // penalty on inter-annual variation across years (first difference)
+  init_number         wt_spl_2d_yrs                           // penalty on selectivity inter-annual smoothness (second difference)
+  vector              scal_yr_nodes(1,n_yr_nodes);            // the yr nodes scaled from 0 to 1
+  vector              scal_age_nodes(1,n_age_nodes);          // the age nodes scaled from 0 to 1
+ 
   
 //==============================================================================================================================
 
@@ -246,7 +259,6 @@ DATA_SECTION
   init_vector          C_tot_na(1,nages_mat)
   init_vector          C_mat_na(1,nages_mat)
 
-
 //==============================================================================================================================
 
 // Add local calcs section for checking if data file is correct
@@ -276,6 +288,42 @@ DATA_SECTION
     }
  END_CALCS
 
+ LOCAL_CALCS  //  setup nodes for splines, and turn off selectivity parameters not being used
+   
+   if (fishselopt==1)
+     {
+       ph_fish_sel_doublelog=-1;
+       ph_cubic_sel=-1;
+     }
+
+   else if (fishselopt==2)    // double logisic selectivity 
+     { 
+      ph_fish_sel=-1;
+      ph_cubic_sel=-1;
+      } 
+
+   else if (fishselopt==3)   // cubic spline selectivity
+    {
+      isel_npar = n_age_nodes;
+      jsel_npar = n_sel_ch_fsh+1;
+      ph_fish_sel_doublelog=-1;
+      ph_fish_sel=-1;
+    }
+
+   else if (fishselopt==4)  // bicubic fishery selectivity 
+   {
+    isel_npar = n_yr_nodes;
+    jsel_npar = n_age_nodes;
+    scal_age_nodes.fill_seqadd(0,1./(n_age_nodes-1));
+    scal_yr_nodes.fill_seqadd(0,1./(n_yr_nodes-1));
+    ph_fish_sel_doublelog=-1;
+    ph_fish_sel=-1;
+    }
+
+ END_CALCS
+
+  matrix rescaled_fish_sel(styr,endyr,1,nages_M)  // rescaled fishery selectivity matrix
+  vector rescaled_F(styr,endyr)                 // rescaled F values
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //==============================================================================================================================
@@ -317,7 +365,7 @@ PARAMETER_SECTION
   init_number          delta2(ph_fish_sel);                    // age between 50% selection and 95% selection....
   init_number          a503(ph_fish_sel);                      // age at 50% selection                                                   
   init_number          delta3(ph_fish_sel);                    // age between 50% selection and 95% selection....
-	init_vector_vector   selp(1,3,0,n_sel_ch_fsh,ph_fish_sel_dlog) // 3 par double logistic, p1=age 5% select, p2=dist from 5% to 95%, p3= dist from "95%" and desc 5%
+	init_vector_vector   selp(1,3,0,n_sel_ch_fsh,ph_fish_sel_doublelog) // 3 par double logistic, p1=age 5% select, p2=dist from 5% to 95%, p3= dist from "95%" and desc 5%
   number               expa50;                                 // gamma selectivity parameter
   number               expa502;                                // gamma selectivity parameter
   vector               fish_sel1(1,nages_M);                    // vectory of fishery selectivty parameters on arithmetic scale
@@ -325,6 +373,8 @@ PARAMETER_SECTION
   vector               fish_sel3(1,nages_M);                   // vectory of fishery selectivty parameters on arithmetic scale
   vector               fish_sel4(1,nages_M);                   // vectory of fishery selectivty parameters on arithmetic scale
 	matrix               fish_sel(styr,endyr,1,nages_M)
+  init_matrix          sel_par(1,jsel_npar,1,isel_npar,ph_cubic_sel);  // fishery selectivity matrix for bicubic and time-varying cubic selectivity
+  matrix               log_fish_sel(styr,endyr,1,nages_M)              // log of fishery selectivity   
  
 // Trawl Survey selectivity
   init_number          a50_srv1(ph_srv1_sel);                  // age at 50% selection                                                   
@@ -345,8 +395,8 @@ PARAMETER_SECTION
   matrix               S(styr,endyr,1,nages_M);                // Survivorship by year and age
 
 //Parameters to estimate maturity
-  init_number          mat_a50(1)                              // age at 50% maturity
-  init_number          mat_delta(1)                            // slope parameter for maturity
+  init_bounded_number          mat_a50(0.,20.,1)                              // age at 50% maturity
+  init_bounded_number          mat_delta(0.,2.,1)                            // slope parameter for maturity
   vector               L_pmat(1,nages_mat)                     // vector for old observed maturity proportions (a.k.a. Lunsford from notherns)                                 
   vector               C_pmat(1,nages_mat)                     // vector for new observed maturity proportions (a.k.a. Chilton from notherns)
   vector               Pred_pmat(1,nages_mat)                  // predicted maturity proportions
@@ -453,6 +503,7 @@ PARAMETER_SECTION
   number               ssqcatch;                               // Likelihood value for catch estimation
   number               F_mort_regularity;                      // Penalty value for fishing mortality regularity
   number               avg_sel_penalty;                        // Penalty value for selectivity regularity penalty
+  vector               spline_pen(1,5);                        // Penalty for splines (across ages and years)                            
 
 // Priors
   vector               priors(1,5);                            // Prior penalty values for sigr,q,natural mortality
@@ -513,7 +564,7 @@ PROCEDURE_SECTION
   {
      evalout<<sigr<<" "<<q_srv1<<" "<<q_srv2<<" "<<F40<<" "<<natmort<<" "<<" "<<ABC<<" "<<obj_fun<<" "<<tot_biom<<" "<<log_rec_dev<<" "<<spawn_biom<<" "<<log_mean_rec<<" "<<spawn_biom_proj<<" "<<pred_catch_proj<<" "<<N_proj(endyr+1,1)<<" "<<N_proj(endyr+2,1)<<" "<<N_proj(endyr+3,1)<<" "<<N_proj(endyr+4,1)<<" "<<N_proj(endyr+5,1)<<" "<<N_proj(endyr+6,1)<<" "<<N_proj(endyr+7,1)<<" "<<N_proj(endyr+8,1)<<" "<<N_proj(endyr+9,1)<<" "<<N_proj(endyr+10,1)<<" "<<tot_biom_proj(endyr+1)<<" "<<tot_biom_proj(endyr+2)<<" "<<pred_srv1<<" "<<endl;
   }
-
+  
 //==============================================================================================================================
 FUNCTION Get_Selectivity
 //==============================================================================================================================
@@ -576,7 +627,44 @@ FUNCTION Get_Selectivity
       }
     break;
     }
+  
+
+    case 3: // cubic spline, varying between blocks
+    {
+      int nbins;
+      nbins = n_sel_ch_fsh + 1;
+      ivector binstart(1,nbins);
+      binstart(1) = styr;
+      for (i=2;i<=nbins;i++) {binstart(i) = yrs_sel_ch(i-1);}
+      int bincount;
+      bincount = 1;
+
+       
+      for (j=1;j<nbins;j++)
+      {
+        for (i=binstart(j);i<binstart(j+1);i++)
+        {
+           log_fish_sel(i)=cubic_spline(sel_par(j));
+        }
+      }
+
+      for (i=binstart(nbins);i<=endyr;i++)
+        {
+           log_fish_sel(i) = cubic_spline(sel_par(j));
+        }
+
+    fish_sel = mfexp(log_fish_sel);   // convert to unlogged space;     
+    break;
+    }
+
+    case 4: // bicubic spline
+    {
+    bicubic_spline(scal_yr_nodes,scal_age_nodes,sel_par,log_fish_sel);
+    fish_sel = mfexp(log_fish_sel);   // convert to unlogged space;
+    break;
+    }
   }
+
 
 
 // Bottom Trawl Survey Selectivity
@@ -592,7 +680,7 @@ FUNCTION Get_Maturity
 
   for (int i=1;i<=nages_mat;i++){
    if(L_tot_na(i)>0){L_pmat(i) = L_mat_na(i)/L_tot_na(i);}
-   if(C_tot_na(i)>0){C_pmat(i) = C_mat_na(i)/C_tot_na(i);}
+   if(C_tot_na(i)>0){C_pmat(i) = C_mat_na(i)/C_tot_na(i);}       
    Pred_pmat(i) = 1/(1+exp(-1.0*mat_delta*(ages_mat(i)-mat_a50)));}
 
   for (int i=1;i<=nages_M;i++){
@@ -644,8 +732,7 @@ FUNCTION Get_First_Year
       natage(styr,j) = natage(styr,j-1)*mfexp(-(natmort + historic_F*fish_sel(styr,j-1)));
     natage(styr,nages_M) /= 1-mfexp(-(historic_F*fish_sel(styr,nages_M)+natmort));   // Plus group for first year
 
-    cout <<  "natage(styr) "  << natage(styr) << endl;  
-
+    
     if (historic_catch > 0.) {  // estimate the historical catch
       ehc = 0;
       for (j=1;j<=nages_M;j++)
@@ -653,16 +740,6 @@ FUNCTION Get_First_Year
           ehc += natage(styr,j)*wt(j)*(historic_F*fish_sel(styr,j))*
                 (1.0-mfexp(-(historic_F*fish_sel(styr,j)+natmort)))/(historic_F*fish_sel(styr,j)+natmort);
           }
-          
-          /*
-          cout << "natage(styr) "  << natage(styr) << endl;
-          cout << "wt " << wt << endl;
-          cout << "historic_F " << historic_F << endl;
-          cout << "fish_sel(styr) "  << fish_sel(styr) << endl;
-          cout << "natmort "  << natmort << endl;
-          cout << "ehc_1 is "  << ehc << endl;
-          */
-
         }
   }  
 
@@ -871,6 +948,7 @@ FUNCTION Compute_SPR_Rates
   sprpen    = 100.*square(SBF50/SB0-0.5);
   sprpen   += 100.*square(SBF40/SB0-0.4);
   sprpen   += 100.*square(SBF35/SB0-0.35);
+
   
   B40= SBF40*mean(pred_rec(1979,endyr-recage));
 
@@ -970,12 +1048,12 @@ FUNCTION Evaluate_Objective_Function
   Surv_Like();                                                 // Trawl survey biomass likelihood (lognormal)
   Size_Age_Like();                                             // Age/Size composition likelihood (multinomial)
   Maturity_Like();                                             // Maturity proportion likelihood (binomial)
-
+  
 // Call functions to compute prior penalties
   Calc_Priors();                                               // Prior penalties for estimated parameters
   Rec_Like();                                                  // Penalty function for recruitment
   if(fyopt==1)  Fy_Like();                                     // Penalty function for first year deviations
-  if(fyopt==2)  Hf_pen();                                      // Penalty function for historic catch 
+  if(fyopt==2)  Hf_pen();                                      // Penalty function for historic catch   
   F_Like();                                                    // Penalty function for fishing mortality deviations
 
 // Sum objective function
@@ -992,13 +1070,17 @@ FUNCTION Evaluate_Objective_Function
       obj_fun           += wt_fy_var * fy_like;
   if(fyopt==2)  
       obj_fun           += wt_hf_pen * hf_pen;
+  if(fishselopt==3 || fishselopt==4 )
+      obj_fun           += sum(spline_pen);
   
   if(active(log_F_devs))
     obj_fun         += F_mort_regularity;
   if (current_phase()<3)
-      obj_fun       += norm2(F);   
+      obj_fun       += norm2(F);
   if (active(mF50)&&last_phase())
-    obj_fun         += sprpen;                                 // To solve for the F40 etc.     
+    obj_fun         += sprpen;   // To solve for the F40 etc.     
+  
+  
 
 //==============================================================================================================================
 FUNCTION Catch_Like
@@ -1096,7 +1178,12 @@ FUNCTION Calc_Priors
 // Calculate prior penalties
   priors.initialize();
   sigr_prior.initialize();
-
+  spline_pen.initialize();
+  dvar_matrix trans_log_fish_sel = trans(log_fish_sel);
+  dvariable s = 0.0;
+  dvar_vector df1;
+  dvar_vector df2;
+  
   if (active(sigr)){
     for(b=1;b<=R_Bk;b++){
       sigr_prior(b) = square(log(sigr(b)/sigrprior))/(2.*square(cvsigrprior));
@@ -1109,6 +1196,47 @@ FUNCTION Calc_Priors
     priors(3)    = square(logm-log(mprior))/(2.*square(cvmprior));
   if (active(log_q_srv2))
     priors(4)    = square(log_q_srv2-log_q_srv2prior)/(2.*square(cvq_srv2prior));
+
+  if (fishselopt==3 || fishselopt==4)  // penalize the dome-shape for fishery selectivity splines  
+   {
+    for (i=styr;i<=endyr;i++)
+     {
+       for (j=1;j<=nages_M-1;j++)
+        {
+         if (log_fish_sel(i,j)>log_fish_sel(i,j+1))
+           {
+             spline_pen(1) += wt_spl_dome*square(log_fish_sel(i,j)-log_fish_sel(i,j+1));  // penalize the dome shape
+           }
+
+         if (wt_spl_1d_yrs>0 || wt_spl_2d_yrs>0 )
+           {
+              df1 = first_difference(trans_log_fish_sel(j));
+              spline_pen(4) +=  wt_spl_1d_yrs/(endyr-styr+1)*df1*df1;                       // the penalty for interannual variation (across years)
+           }
+         if (wt_spl_2d_yrs>0)
+          {   
+            df2 = first_difference(df1);                                     
+            spline_pen(5) += wt_spl_2d_yrs/(endyr-styr+1)*df2*df2;                         // the penalty for smoothness over time
+          }
+         }
+        if (wt_spl_1d_yrs>0 || wt_spl_2d_yrs>0 )
+           {
+              df1 = first_difference(trans_log_fish_sel(nages_M));  
+              spline_pen(4) +=  wt_spl_1d_yrs/(endyr-styr+1)*df1*df1;
+           }
+        if (wt_spl_2d_yrs>0)
+           {   
+              df2 = first_difference(df1);                                     
+              spline_pen(5) += wt_spl_2d_yrs/(endyr-styr+1)*df2*df2;                         
+           }     
+       s = mean(log_fish_sel(i));
+       spline_pen(2) += wt_spl_avg*s*s;                                 // penalize deviations from 0 (across ages)
+       dvar_vector df3 = first_difference(first_difference(log_fish_sel(i)));
+       spline_pen(3) += wt_spl_2d_ages/nages_M*df3*df3;                                   // penalize 2nd deriviative (smoothness across ages)
+      }
+    }
+
+
 
 //==============================================================================================================================
 FUNCTION Rec_Like
@@ -1133,11 +1261,7 @@ FUNCTION Fy_Like
 FUNCTION Hf_pen
 //==============================================================================================================================
 
-  hf_pen.initialize();
-  cout << "ehc is "  << ehc << endl;
-  cout << "historic_catch is "  << historic_catch << endl;
-  cout << "historic_F is "  << historic_F << endl;
-  
+  hf_pen.initialize();  
   hf_pen = square(ehc-historic_catch);
   
 //==============================================================================================================================
@@ -1150,6 +1274,24 @@ FUNCTION F_Like
     F_mort_regularity  = wt_fmort_reg * norm2(log_F_devs);
 
 //==============================================================================================================================
+FUNCTION dvar_vector cubic_spline(const dvar_vector& spline_coffs)
+//==============================================================================================================================
+  {
+  RETURN_ARRAYS_INCREMENT();
+  int nodes=size_count(spline_coffs);
+  dvector ia(1,nodes);
+  dvector fa(1,nages_M);
+  ia.fill_seqadd(0,1./(nodes-1));
+  fa.fill_seqadd(0,1./(nages_M-1));
+  vcubic_spline_function ffa(ia,spline_coffs);
+  RETURN_ARRAYS_DECREMENT();
+  return(ffa(fa));
+  }
+
+
+
+
+//==============================================================================================================================
 FUNCTION double round(double r) 
 //==============================================================================================================================
 
@@ -1158,8 +1300,23 @@ FUNCTION double round(double r)
 //==============================================================================================================================
 REPORT_SECTION
 //==============================================================================================================================
-                          
 
+  // rescale F and fishery sel so that fishery selective has max of one
+
+  if(fishselopt==3 || fishselopt==4 )
+  {
+    rescaled_F = value(mfexp(log_avg_F + log_F_devs));
+
+    for (i=styr;i<=endyr;i++)
+      {
+        rescaled_fish_sel(i) = value(fish_sel(i));
+        rescaled_F(i) = rescaled_F(i)*max(rescaled_fish_sel(i));
+        rescaled_fish_sel(i) = rescaled_fish_sel(i)/max(rescaled_fish_sel(i));
+      }
+
+  }    
+
+                          
    cout<<"-------------Finished: "<<current_phase()<<" "<<Like<<" "<<age_like<<endl;
 
 // Beginning of all outputting
@@ -1280,11 +1437,22 @@ REPORT_SECTION
   report << "SpBiom "<< spawn_biom <<endl;
   report << "Tot_biom "<< tot_biom   <<endl;
   report << "Recruitment "<< pred_rec   <<endl;
-  report << "Fully_selected_F "<< Fmort*max(fish_sel4) <<endl<<endl;;
+  if (fishselopt==3 || fishselopt==4){
+    report << "Fully_selected_F "<< rescaled_F <<endl<<endl;;
+  }
+  else{
+    report << "Fully_selected_F "<< Fmort*max(fish_sel4) <<endl<<endl;;
+  }
+
   report << "Age  "<<aa<< endl;
   report << "Weight "<< wt << endl;
   report << "Maturity "<<p_mature<<endl;
-  for (i=styr;i<=endyr;i++) report <<"Fishery_Selectivity_"<< i<<" "<<fish_sel(i) <<endl;
+  if (fishselopt==3 || fishselopt==4){
+    for (i=styr;i<=endyr;i++) report <<"Fishery_Selectivity_"<< i<<" "<<rescaled_fish_sel(i) <<endl;
+  }
+  else{
+    for (i=styr;i<=endyr;i++) report <<"Fishery_Selectivity_"<< i<<" "<<fish_sel(i) <<endl;  
+  }
   //report << "Fishery_Selectivity_1967-1976" << fish_sel1  <<endl;
   //report << "Fishery_Selectivity_1977-1995" << fish_sel2  <<endl;
   //report << "Fishery_Selectivity_1996-2006" << fish_sel3  <<endl;
@@ -1372,6 +1540,7 @@ FUNCTION write_proj
 FINAL_SECTION
 //==============================================================================================================================
   // R_Report(fish_sel);
+  
   R_report<<"#Selectivity"<<endl; 
   for (i=styr;i<=endyr;i++) 
     R_report<<i<<" "<<fish_sel(i)<<endl;

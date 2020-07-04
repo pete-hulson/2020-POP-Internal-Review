@@ -16,7 +16,9 @@ class model_data : public ad_comm{
   data_int ph_fydev;
   data_int ph_historic_F;
   data_int ph_fish_sel;
-  int ph_fish_sel_dlog;
+  data_int ph_fish_sel_dlog;
+  int ph_fish_sel_doublelog;
+  data_int ph_cubic_sel;
   data_int ph_srv1_sel;
   data_int ph_srv2_sel;
   data_number mprior;
@@ -61,6 +63,17 @@ class model_data : public ad_comm{
   data_vector sigma_sel_ch;
   data_number R_Bk;
   data_vector R_Bk_Yrs;
+  data_int n_yr_nodes;
+  data_int n_age_nodes;
+  int isel_npar;
+  int jsel_npar;
+  data_number wt_spl_avg;
+  data_number wt_spl_dome;
+  data_number wt_spl_2d_ages;
+  data_number wt_spl_1d_yrs;
+  data_number wt_spl_2d_yrs;
+  dvector scal_yr_nodes;
+  dvector scal_age_nodes;
   data_int styr;
   data_int endyr;
   data_int recage;
@@ -147,6 +160,8 @@ class model_data : public ad_comm{
   data_vector L_mat_na;
   data_vector C_tot_na;
   data_vector C_mat_na;
+  dmatrix rescaled_fish_sel;
+  dvector rescaled_F;
   ~model_data();
   model_data(int argc,char * argv[]);
   friend class model_parameters;
@@ -205,6 +220,8 @@ private:
   param_vector fish_sel3;
   param_vector fish_sel4;
   param_matrix fish_sel;
+  param_init_matrix sel_par;
+  param_matrix log_fish_sel;
   param_init_number a50_srv1;
   param_init_number delta_srv1;
   param_vector srv1_sel;
@@ -217,8 +234,8 @@ private:
   param_matrix Z;
   param_matrix F;
   param_matrix S;
-  param_init_number mat_a50;
-  param_init_number mat_delta;
+  param_init_bounded_number mat_a50;
+  param_init_bounded_number mat_delta;
   param_vector L_pmat;
   param_vector C_pmat;
   param_vector Pred_pmat;
@@ -304,6 +321,7 @@ private:
   param_number ssqcatch;
   param_number F_mort_regularity;
   param_number avg_sel_penalty;
+  param_vector spline_pen;
   param_vector priors;
   param_vector sigr_prior;
   param_number Like;
@@ -360,6 +378,7 @@ public:
   void Fy_Like(void);
   void Hf_pen(void);
   void F_Like(void);
+ dvar_vector cubic_spline(const dvar_vector& spline_coffs);
  double round(double r);
  double sdnr(const dvar_vector& pred,const dvector& obs,double m);
   void write_proj(void);
